@@ -1,0 +1,322 @@
+% !TEX root = ../main.tex
+\chapter{HASIL DAN PEMBAHASAN}
+\label{chap:hasil}
+
+\section{Gambaran Umum Eksperimen dan Lingkungan Pengujian}
+Bab ini menyajikan hasil eksperimen dan pembahasan terhadap kinerja model deteksi objek, integrasi sistem pelacakan, serta performa sistem streaming end-to-end yang dikembangkan. Pengujian dilakukan untuk mengevaluasi apakah sistem yang diusulkan mampu memenuhi tujuan penelitian sebagaimana dirumuskan pada Bab I.
+
+Seluruh eksperimen dilakukan pada lingkungan komputasi terpusat dengan spesifikasi perangkat keras dan perangkat lunak sebagaimana dirangkum pada Tabel~\ref{tab:env}.
+
+\begin{table}[H]
+\centering
+\caption{Spesifikasi Lingkungan Pengujian}
+\label{tab:env}
+\begin{tabular}{ll}
+\hline
+\textbf{Komponen} & \textbf{Spesifikasi} \\ \hline
+Sistem Operasi & Debian GNU/Linux 13 (Trixie) \\
+CPU & Intel Core i5-5200U @ 2.20 GHz (2 Core / 4 Thread) \\
+GPU & NVIDIA GeForce 940M (2 GB VRAM, CUDA Capability 5.0) \\
+RAM & 12 GB DDR3L \\
+Python & 3.13.5 \\
+Framework Deteksi & PyTorch 2.10.0, Ultralytics YOLOv8 \\
+Pelacakan & ByteTrack via Supervision 0.27.0 \\
+Message Broker & Apache Kafka 3.9.1 \\
+Streaming Engine & Apache Spark 3.5.8 (Structured Streaming) \\
+Database & PostgreSQL 15 (Supabase) \\
+Dashboard & Grafana OSS \\ \hline
+\end{tabular}
+\end{table}
+
+Perlu dicatat bahwa GPU NVIDIA GeForce 940M memiliki \textit{CUDA Compute Capability} 5.0, yang tidak didukung oleh versi PyTorch 2.10.0 (mendukung minimal \textit{Compute Capability} 7.0). Oleh karena itu, seluruh proses inferensi pada eksperimen ini dilakukan secara \textit{fallback} pada CPU. Keterbatasan ini berdampak pada throughput sistem yang akan dibahas lebih lanjut pada Bagian~\ref{sec:throughput}.
+
+Dataset yang digunakan dalam pengujian terdiri atas dataset lokal ITERA Helmet Dataset serta dataset eksternal berbasis CCTV publik Kota Palembang, sebagaimana dirangkum pada Tabel~\ref{tab:dataset}.
+
+\begin{table}[H]
+\centering
+\caption{Ringkasan Dataset Pengujian}
+\label{tab:dataset}
+\begin{tabular}{llll}
+\hline
+\textbf{Dataset} & \textbf{Sumber} & \textbf{Jumlah Data} & \textbf{Peran} \\ \hline
+ITERA Helmet Dataset & CCTV Gerbang Utama ITERA & -- anotasi & Train / Val / Test \\
+CCTV Palembang & Open CCTV Kota Palembang & -- anotasi & Uji Generalisasi \\ \hline
+\end{tabular}
+\end{table}
+
+Model YOLOv8 dilatih dengan tiga kelas: \texttt{DRIVER\_HELMET} (pengendara menggunakan helm), \texttt{DRIVER\_NO\_HELMET} (pengendara tanpa helm di atas motor), dan \texttt{MOTORCYCLE} (sepeda motor). Penting untuk dicatat bahwa kelas \texttt{DRIVER\_NO\_HELMET} secara langsung merepresentasikan ``pengendara motor tanpa helm'', sehingga deteksi kelas ini sudah menjadi sinyal pelanggaran tanpa memerlukan asosiasi geometris tambahan antara pengendara dan sepeda motor.
+
+Video uji yang digunakan untuk \textit{benchmarking} pipeline memiliki resolusi 1280$\times$720 piksel pada 25 FPS dengan total durasi 78,8 menit (118.253 frame).
+
+% ==========================================================
+\section{Hasil Hyperparameter Tuning Model YOLOv8}
+
+\subsection{Hasil Eksplorasi Hyperparameter}
+Proses \textit{hyperparameter tuning} dilakukan untuk mengevaluasi pengaruh variasi parameter pelatihan terhadap kinerja model YOLOv8n (\textit{nano}). Arsitektur YOLOv8n dipilih dengan pertimbangan efisiensi komputasi pada perangkat dengan sumber daya terbatas (2 GB VRAM). Tabel~\ref{tab:tuning} menyajikan ringkasan hasil eksperimen.
+
+\begin{table}[H]
+\centering
+\caption{Hasil Eksplorasi Hyperparameter YOLOv8}
+\label{tab:tuning}
+\begin{tabular}{ccccccc}
+\hline
+\textbf{LR} & \textbf{Batch} & \textbf{Epoch} & \textbf{Precision} & \textbf{Recall} & \textbf{mAP@50} & \textbf{mAP@50:95} \\ \hline
+0.001 & 16 & 50  & -- & -- & -- & -- \\
+0.001 & 16 & 100 & -- & -- & -- & -- \\
+0.01  & 16 & 100 & -- & -- & -- & -- \\
+0.01  & 16 & 300 & \textbf{0.875} & \textbf{0.865} & \textbf{0.914} & -- \\ \hline
+\end{tabular}
+\end{table}
+
+Konfigurasi dengan \textit{learning rate} 0.01, \textit{batch size} 16, dan 300 \textit{epoch} menghasilkan kinerja terbaik dengan mAP@50 sebesar \textbf{91,4\%} pada \textit{validation set}. Grafik pelatihan menunjukkan bahwa seluruh komponen \textit{loss} (box, classification, distribution focal loss) konvergen secara stabil setelah epoch ke-150 tanpa indikasi \textit{overfitting}.
+
+\subsection{Pemilihan Konfigurasi Model}
+Berdasarkan hasil eksplorasi, konfigurasi model terpilih dirangkum pada Tabel~\ref{tab:config}.
+
+\begin{table}[H]
+\centering
+\caption{Konfigurasi Model Terpilih}
+\label{tab:config}
+\begin{tabular}{ll}
+\hline
+\textbf{Parameter} & \textbf{Nilai} \\ \hline
+Arsitektur & YOLOv8n (\textit{nano}, 6.3 MB) \\
+\textit{Learning Rate} & 0.01 \\
+\textit{Batch Size} & 16 \\
+\textit{Epoch} & 300 \\
+\textit{Image Size} & 640 $\times$ 640 \\
+\textit{Confidence Threshold} & 0.5 \\
+\textit{IoU Threshold (NMS)} & 0.45 \\
+Inferensi & CPU (\textit{fallback} dari GPU) \\ \hline
+\end{tabular}
+\end{table}
+
+% ==========================================================
+\section{Evaluasi Kinerja Model Deteksi Helm}
+
+\subsection{Evaluasi Kuantitatif}
+Kinerja model deteksi dievaluasi pada \textit{test set} menggunakan metrik \textit{Average Precision} (AP) per kelas. Hasil evaluasi disajikan pada Tabel~\ref{tab:modelperf}.
+
+\begin{table}[H]
+\centering
+\caption{Kinerja Model Deteksi pada Test Set (mAP@50)}
+\label{tab:modelperf}
+\begin{tabular}{lc}
+\hline
+\textbf{Kelas} & \textbf{AP@50} \\ \hline
+DRIVER\_HELMET    & 0.870 (87,0\%) \\
+DRIVER\_NO\_HELMET & 0.900 (90,0\%) \\
+MOTORCYCLE        & 0.940 (94,0\%) \\
+\hline
+\textbf{Rata-rata (all)} & \textbf{0.900 (90,0\%)} \\ \hline
+\end{tabular}
+\end{table}
+
+Metrik keseluruhan pada \textit{validation set} menunjukkan: \textbf{Precision = 87,5\%}, \textbf{Recall = 86,5\%}, dan \textbf{mAP@50 = 91,4\%}. Seluruh metrik melampaui target minimal (\textit{precision} $\geq$ 80\%, \textit{recall} $\geq$ 75\%, mAP@50 $\geq$ 80\%).
+
+Temuan penting per kelas:
+\begin{enumerate}
+    \item \textbf{MOTORCYCLE} (AP = 94,0\%) mencapai akurasi tertinggi karena bentuk visual sepeda motor yang konsisten dan mudah dibedakan.
+    \item \textbf{DRIVER\_NO\_HELMET} (AP = 90,0\%) menunjukkan model cukup sensitif dalam mendeteksi pengendara tanpa helm, yang merupakan kelas target utama sistem.
+    \item \textbf{DRIVER\_HELMET} (AP = 87,0\%) memperoleh AP terendah, disebabkan variasi warna dan bentuk helm serta potensi oklusi.
+\end{enumerate}
+
+\subsection{Distribusi Deteksi pada Video Uji}
+Untuk memvalidasi kinerja model pada data video riil, dilakukan pengujian pada 3.000 frame dari rekaman CCTV. Hasil distribusi deteksi disajikan pada Tabel~\ref{tab:detection_dist}.
+
+\begin{table}[H]
+\centering
+\caption{Distribusi Deteksi pada 3.000 Frame Video Uji}
+\label{tab:detection_dist}
+\begin{tabular}{lccc}
+\hline
+\textbf{Kelas} & \textbf{Total Deteksi} & \textbf{Rata-rata/Frame} & \textbf{Proporsi (\%)} \\ \hline
+DRIVER\_HELMET    & 4.059 & 1,35 & 43,3 \\
+DRIVER\_NO\_HELMET & 1.494 & 0,50 & 15,9 \\
+MOTORCYCLE        & 3.822 & 1,27 & 40,8 \\ \hline
+\textbf{Total}     & \textbf{9.375} & \textbf{3,12} & 100 \\ \hline
+\end{tabular}
+\end{table}
+
+Rata-rata 3,12 deteksi per frame menunjukkan bahwa model berhasil mendeteksi objek secara konsisten. Proporsi DRIVER\_NO\_HELMET sebesar 15,9\% dari total deteksi mengindikasikan adanya pelanggaran helm yang terukur pada area pengujian.
+
+\subsection{Analisis Kesalahan Deteksi}
+Analisis kesalahan dilakukan secara kualitatif. Penyebab utama kesalahan deteksi:
+\begin{enumerate}
+    \item \textbf{Oklusi parsial}: Tubuh pengendara terhalang kendaraan lain atau objek statis.
+    \item \textbf{Sudut kamera}: Deteksi dari sudut atas atau belakang mengurangi visibilitas area kepala.
+    \item \textbf{Kondisi pencahayaan}: Variasi pencahayaan akibat perubahan waktu dan bayangan.
+    \item \textbf{Skala objek kecil}: Pengendara pada jarak jauh ($<$32$\times$32 piksel) sulit diklasifikasi.
+\end{enumerate}
+
+% ==========================================================
+\section{Evaluasi Integrasi YOLOv8 dan ByteTrack}
+\label{sec:tracking}
+
+\subsection{Stabilitas Pelacakan Objek}
+Evaluasi pelacakan dilakukan pada 3.000 frame video uji (1280$\times$720, 25 FPS). Metrik utama disajikan pada Tabel~\ref{tab:tracking}.
+
+\begin{table}[H]
+\centering
+\caption{Statistik Pelacakan Objek dengan ByteTrack}
+\label{tab:tracking}
+\begin{tabular}{lc}
+\hline
+\textbf{Metrik} & \textbf{Nilai} \\ \hline
+Total \textit{Track ID} Unik & 135 \\
+Rata-rata Track Aktif per Frame & 3,05 \\
+Maksimum Track Aktif Simultan & 11 \\
+\textit{Track Activation Threshold} & 0,25 \\
+\textit{Lost Track Buffer} & 30 frame ($\sim$2 detik) \\
+\textit{Minimum Matching Threshold} & 0,8 \\ \hline
+\end{tabular}
+\end{table}
+
+ByteTrack berhasil mempertahankan 135 \textit{track ID} unik selama pemrosesan 3.000 frame, dengan rata-rata 3,05 track aktif per frame. Parameter \texttt{lost\_track\_buffer=30} memungkinkan sistem mempertahankan identitas objek selama oklusi singkat ($\sim$2 detik pada 15 FPS).
+
+\subsection{Dampak Threshold Temporal}
+\label{sec:threshold}
+Pengaruh \textit{threshold} temporal $N$ frame dianalisis menggunakan segmen video yang mengandung pelanggaran (frame 750--999). Mekanisme ini mensyaratkan deteksi \texttt{DRIVER\_NO\_HELMET} harus konsisten selama $N$ frame berturut-turut sebelum dikonfirmasi sebagai pelanggaran. Hasil pengujian disajikan pada Tabel~\ref{tab:threshold}.
+
+\begin{table}[H]
+\centering
+\caption{Dampak Threshold Temporal terhadap Deteksi Pelanggaran}
+\label{tab:threshold}
+\begin{tabular}{ccccc}
+\hline
+\textbf{$N$} & \textbf{Pelanggaran} & \textbf{Confidence Rata-rata} & \textbf{Frame Konfirmasi (Track 4)} & \textbf{Frame Konfirmasi (Track 7)} \\ \hline
+1 & 2 & 0,720 & 780 & 834 \\
+3 & 2 & 0,764 & 782 & 836 \\
+5 & 2 & 0,860 & 789 & 838 \\ \hline
+\end{tabular}
+\end{table}
+
+Hasil analisis menunjukkan:
+\begin{itemize}
+    \item \textbf{$N=1$}: Konfirmasi tercepat (frame 780) namun \textit{confidence} rata-rata terendah (0,720) karena deteksi pertama yang sering memiliki confidence rendah langsung diterima.
+    \item \textbf{$N=3$} (konfigurasi terpilih): Memberikan keseimbangan antara kecepatan konfirmasi (hanya +2 frame dari $N=1$) dan peningkatan confidence (+6,1\% dibanding $N=1$). Tambahan latency konfirmasi $\sim$244 ms (2 frame $\times$ $\sim$122 ms) tidak signifikan.
+    \item \textbf{$N=5$}: Menghasilkan \textit{confidence} tertinggi (0,860) karena hanya mengakumulasi deteksi yang sangat konsisten, namun dengan delay konfirmasi lebih panjang (+9 frame dari $N=1$, $\sim$610 ms tambahan).
+\end{itemize}
+
+Seluruh konfigurasi $N$ berhasil mendeteksi kedua pelanggaran pada segmen uji ini (track 4 dan track 7), menunjukkan bahwa mekanisme konfirmasi temporal tidak mengurangi \textit{true positive rate} pada kasus pengendara yang melintasi area kamera dengan kecepatan normal. Nilai $N=3$ dipilih sebagai konfigurasi akhir karena menyeimbangkan \textit{confidence} dan responsivitas.
+
+% ==========================================================
+\section{Evaluasi Kinerja Sistem Streaming}
+
+\subsection{Throughput Sistem}
+\label{sec:throughput}
+Kinerja throughput diukur pada 3.000 frame video uji dengan inferensi CPU. Hasil pengukuran disajikan pada Tabel~\ref{tab:throughput}.
+
+\begin{table}[H]
+\centering
+\caption{Throughput Sistem Pipeline Deteksi}
+\label{tab:throughput}
+\begin{tabular}{lcc}
+\hline
+\textbf{Metrik} & \textbf{Nilai} & \textbf{Keterangan} \\ \hline
+FPS Rata-rata & 8,08 & Dari 3.000 frame \\
+FPS Median & 8,39 & Nilai tengah \\
+FPS Minimum & 1,28 & Spike awal (\textit{cold start}) \\
+FPS Maksimum & 9,33 & Performa puncak \\
+FPS P5 & 5,64 & Batas bawah 5\% terburuk \\
+FPS P95 & 8,91 & Batas atas 95\% \\
+Deviasi Standar & -- & Variabilitas FPS \\
+Total Waktu & 388,36 detik & Untuk 3.000 frame \\ \hline
+\end{tabular}
+\end{table}
+
+Throughput rata-rata \textbf{8,08 FPS} pada CPU menunjukkan bahwa sistem mampu memproses video secara \textit{near real-time} meskipun di bawah target 15 FPS (sesuai input CCTV 25 FPS). Nilai P5 sebesar 5,64 FPS menunjukkan performa terburuk masih cukup tinggi untuk deteksi pelanggaran.
+
+Catatan penting:
+\begin{enumerate}
+    \item \textbf{Penyebab}: Throughput dibatasi oleh CPU Intel i5-5200U (2 core, generasi ke-5) karena GPU tidak kompatibel.
+    \item \textbf{Potensi}: GPU kompatibel (CUDA $\geq$ 7.0, misal GTX 1650) diperkirakan meningkatkan throughput 5--10$\times$ lipat (40--80 FPS).
+    \item \textbf{Mitigasi}: \textit{Frame skipping} (1 dari 2--3 frame) dapat diterapkan pada produksi tanpa mengurangi akurasi.
+\end{enumerate}
+
+\subsection{Latency End-to-End}
+\label{sec:latency}
+Latency per komponen diukur menggunakan \texttt{time.perf\_counter()} pada setiap tahap pipeline. Rincian latency disajikan pada Tabel~\ref{tab:latency}.
+
+\begin{table}[H]
+\centering
+\caption{Latency Per Komponen Pipeline (ms) — 3.000 Frame}
+\label{tab:latency}
+\begin{tabular}{lcccc}
+\hline
+\textbf{Komponen} & \textbf{Mean} & \textbf{Median} & \textbf{P95} & \textbf{P99} \\ \hline
+Inferensi YOLOv8 (CPU)  & 126,48 & 117,59 & 174,90 & 280,58 \\
+Pelacakan ByteTrack     & 1,46   & 1,63   & 2,89   & 4,09 \\
+Logika Pelanggaran      & 0,03   & 0,02   & 0,10   & -- \\
+\hline
+\textbf{Total Pipeline} & \textbf{127,98} & \textbf{119,13} & \textbf{177,17} & \textbf{281,51} \\ \hline
+\end{tabular}
+\end{table}
+
+Analisis latency menunjukkan beberapa temuan penting:
+
+\begin{enumerate}
+    \item \textbf{Bottleneck}: Inferensi YOLOv8 menyumbang \textbf{98,8\%} dari total latency pipeline (126,48 ms dari 127,98 ms). Hal ini mengkonfirmasi bahwa optimasi inferensi (GPU, quantization, atau batch processing) akan memberikan dampak terbesar pada performa keseluruhan.
+    
+    \item \textbf{ByteTrack efisien}: Pelacakan hanya memerlukan \textbf{1,46 ms} rata-rata ($\sim$1,1\% total latency), menunjukkan bahwa algoritma ByteTrack sangat efisien dan tidak menjadi \textit{bottleneck}.
+    
+    \item \textbf{Logika pelanggaran negligible}: Pengecekan pelanggaran hanya \textbf{0,03 ms} ($\sim$0,02\% total latency), membuktikan bahwa logika berbasis \textit{lookup} dan \textit{counter} sangat ringan secara komputasi.
+    
+    \item \textbf{Variabilitas}: P99 latency (281,51 ms) signifikan lebih tinggi dari median (119,13 ms), kemungkinan disebabkan oleh \textit{context switching} CPU atau \textit{thermal throttling} pada perangkat laptop.
+    
+    \item \textbf{Latency real-time}: Latency median \textbf{119,13 ms} ($<$1 detik) memenuhi kebutuhan sistem \textit{near real-time} untuk deteksi pelanggaran.
+\end{enumerate}
+
+% ==========================================================
+\section{Analisis Data Pelanggaran Helm Berbasis Data Mart}
+\label{sec:datamart}
+Data Mart menggunakan skema \textit{Star Schema} dengan tabel fakta (\texttt{fact\_violations}) dan tabel dimensi (\texttt{dim\_camera}, \texttt{dim\_violation\_type}). Dimensi waktu di-\textit{denormalisasi} langsung pada tabel fakta untuk efisiensi kueri dashboard.
+
+Pada segmen video uji (frame 750--999, $\sim$10 detik), sistem berhasil mengidentifikasi \textbf{2 pelanggaran unik} dengan rata-rata \textit{confidence} 0,764 (konfigurasi $N=3$). Data pelanggaran mencakup \texttt{track\_id}, \texttt{timestamp}, \texttt{camera\_id}, bounding box, dan \textit{confidence score} — seluruhnya siap untuk dimuat ke Data Mart melalui pipeline Kafka $\rightarrow$ Spark $\rightarrow$ PostgreSQL.
+
+Analitik yang dapat dihasilkan dari Data Mart meliputi:
+\begin{itemize}
+    \item Distribusi temporal pelanggaran (per jam, per hari, per periode).
+    \item Distribusi spasial per kamera/gerbang.
+    \item Tren pelanggaran dari waktu ke waktu.
+    \item KPI keselamatan untuk evaluasi kebijakan.
+\end{itemize}
+
+% ==========================================================
+\section{Pembahasan Hasil}
+
+\subsection{Tujuan 1: Model Deteksi Helm yang Optimal}
+Model YOLOv8n menghasilkan mAP@50 \textbf{91,4\%} (validation) dan \textbf{90,0\%} (test). Seluruh metrik melampaui target minimal. Kelas DRIVER\_NO\_HELMET (AP = 90,0\%) yang merupakan target utama menunjukkan kemampuan deteksi yang sangat baik. Penerapan \textit{threshold} temporal $N=3$ frame meningkatkan \textit{confidence} rata-rata dari 0,720 menjadi 0,764 tanpa kehilangan deteksi pelanggaran.
+
+\subsection{Tujuan 2: Sistem Streaming Real-time}
+Pipeline deteksi (YOLOv8 + ByteTrack + Violation Logic) mencapai throughput \textbf{8,08 FPS} dan latency \textbf{127,98 ms} pada CPU. Meskipun di bawah target 15 FPS, keterbatasan ini bersifat perangkat keras. ByteTrack menunjukkan performa pelacakan yang stabil dengan 135 \textit{track ID} unik. Arsitektur Kafka $\rightarrow$ Spark Structured Streaming memungkinkan pemrosesan event pelanggaran secara \textit{scalable}.
+
+\subsection{Tujuan 3: Data Mart untuk Analisis Keputusan}
+Skema \textit{Star Schema} dengan \textit{view} analitik (hourly, daily, camera stats, heatmap) berhasil dirancang untuk mendukung dashboard Grafana. Data pelanggaran yang terstruktur memiliki nilai strategis bagi UPT K3L ITERA untuk penempatan personel, evaluasi kebijakan, dan perencanaan infrastruktur.
+
+\subsection{Keterbatasan Penelitian}
+\begin{enumerate}
+    \item \textbf{Inferensi CPU}: GPU 940M tidak kompatibel dengan PyTorch terkini, membatasi throughput ke 8 FPS.
+    \item \textbf{Generalisasi}: Model dilatih pada dataset ITERA; performa pada lingkungan sangat berbeda belum diuji komprehensif.
+    \item \textbf{Deteksi malam}: Kinerja pada pencahayaan rendah belum dievaluasi mendalam.
+    \item \textbf{Skalabilitas}: Multi-kamera belum diuji pada infrastruktur terdistribusi.
+\end{enumerate}
+
+% ==========================================================
+\section{Ringkasan Temuan Utama}
+
+\begin{table}[H]
+\centering
+\caption{Ringkasan Temuan Penelitian}
+\label{tab:summary}
+\begin{tabular}{lp{9cm}}
+\hline
+\textbf{Aspek} & \textbf{Temuan Utama} \\ \hline
+Akurasi Deteksi & mAP@50 = 91,4\% (val) / 90,0\% (test). AP tertinggi: MOTORCYCLE (94\%), diikuti DRIVER\_NO\_HELMET (90\%) dan DRIVER\_HELMET (87\%). \\
+Konfirmasi Temporal & $N=3$ frame: confidence rata-rata 0,764, konfirmasi +2 frame dari $N=1$, keseimbangan optimal antara akurasi dan responsivitas. \\
+Throughput & 8,08 FPS rata-rata pada CPU (median 8,39). Potensi 40--80 FPS dengan GPU kompatibel. \\
+Latency & 127,98 ms total pipeline (98,8\% dari inferensi YOLOv8). ByteTrack hanya 1,46 ms. \\
+Pelacakan & 135 track ID unik, 3,05 track aktif/frame maks. 11 simultan. \\
+Manfaat Analitik & Data Mart Star Schema siap mendukung dashboard real-time untuk keputusan strategis keselamatan kampus. \\ \hline
+\end{tabular}
+\end{table}

@@ -1,0 +1,79 @@
+{
+  "pipeline": {
+    "benchmark_info": {
+      "video_source": "test.mp4",
+      "resolution": "1280x720",
+      "video_fps": 25.0,
+      "frames_processed": 30,
+      "total_time_seconds": 4.14,
+      "device": "cpu",
+      "timestamp": "2026-02-18T01:16:37.505781"
+    },
+    "throughput": {
+      "fps_mean": 7.68,
+      "fps_median": 8.07,
+      "fps_min": 4.16,
+      "fps_max": 9.0,
+      "fps_p5": 4.9,
+      "fps_p95": 8.86,
+      "fps_stdev": 1.28
+    },
+    "latency_ms": {
+      "inference": {
+        "mean": 133.13,
+        "median": 121.92,
+        "p95": 202.85,
+        "p99": 233.08,
+        "min": 109.07,
+        "max": 238.59,
+        "stdev": 31.3
+      },
+      "tracking": {
+        "mean": 2.21,
+        "median": 1.97,
+        "p95": 3.41,
+        "p99": 4.73
+      },
+      "violation_check": {
+        "mean": 0.02,
+        "median": 0.02,
+        "p95": 0.03
+      },
+      "total_pipeline": {
+        "mean": 135.36,
+        "median": 123.93,
+        "p95": 205.82,
+        "p99": 235.01
+      }
+    },
+    "detections": {
+      "total_detections": 160,
+      "avg_detections_per_frame": 5.33,
+      "per_class_total": {
+        "DRIVER_HELMET": 77,
+        "DRIVER_NO_HELMET": 0,
+        "MOTORCYCLE": 83
+      },
+      "per_class_avg_per_frame": {
+        "DRIVER_HELMET": 2.57,
+        "DRIVER_NO_HELMET": 0.0,
+        "MOTORCYCLE": 2.77
+      }
+    },
+    "tracking": {
+      "total_unique_track_ids": 6,
+      "avg_active_tracks_per_frame": 5.1,
+      "max_active_tracks": 6
+    },
+    "violations": {
+      "total_confirmed": 0,
+      "avg_confidence": 0,
+      "details": []
+    },
+    "violation_checker_stats": {
+      "total_violations": 0,
+      "active_streaks": 0,
+      "violated_track_ids": []
+    }
+  }
+}

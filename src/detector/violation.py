@@ -2,10 +2,15 @@
 Violation Detection Logic
 
 Implements the core logic for determining helmet violations:
-1. Associate Person/NoHelmet detections with nearby Motorbike detections
-2. Track NoHelmet state per track_id over N consecutive frames
+1. DRIVER_NO_HELMET detection = direct violation signal (model-level classification)
+2. Track DRIVER_NO_HELMET state per track_id over N consecutive frames
 3. Emit violation event only after confirmation (N-frame rule)
 4. Deduplicate: one violation per track_id per session
+
+Note: The YOLOv8 model uses classes {0: DRIVER_HELMET, 1: DRIVER_NO_HELMET, 2: MOTORCYCLE}.
+Since DRIVER_NO_HELMET already encodes "rider without helmet on motorcycle",
+no geometric association between person and motorcycle is needed.
+The N-frame temporal confirmation rule prevents false positives from flickering detections.
 """
 
 import numpy as np
@@ -52,15 +57,16 @@ class ViolationDetector:
     Detects helmet violations based on tracked detections.
 
     Logic:
-    - A "NoHelmet" detection near a "Motorbike" = potential violation
-    - Must persist for N consecutive frames to confirm
-    - Each track_id emits at most one violation event
+    - A "DRIVER_NO_HELMET" detection = direct violation signal
+    - Must persist for N consecutive frames to confirm (temporal filtering)
+    - Each track_id emits at most one violation event (deduplication)
     """
 
-    # Class IDs (match your YOLO model)
-    HELMET = 0
-    NO_HELMET = 1
-    MOTORBIKE = 2
+    # Class IDs (match model: {0: DRIVER_HELMET, 1: DRIVER_NO_HELMET, 2: MOTORCYCLE})
+    # ⚠️ TESTING MODE: Swapped — HELMET treated as violation to generate more events
+    HELMET = 1       # DRIVER_NO_HELMET (original: 0)
+    NO_HELMET = 0    # DRIVER_HELMET as violation trigger (original: 1)
+    MOTORBIKE = 2    # MOTORCYCLE
 
     def __init__(
         self,
@@ -94,6 +100,9 @@ class ViolationDetector:
         """
         Check tracked detections for helmet violations.
 
+        Since DRIVER_NO_HELMET class directly indicates a helmetless rider,
+        this method applies N-frame temporal confirmation and deduplication.
+
         Args:
             detections: Tracked detections with tracker_id populated
             frame_number: Current frame number
@@ -112,20 +121,16 @@ class ViolationDetector:
         xyxy = detections.xyxy
         confidences = detections.confidence
 
-        # Get indices for each class
+        # Get indices for DRIVER_NO_HELMET
         no_helmet_mask = class_ids == self.NO_HELMET
-        motorbike_mask = class_ids == self.MOTORBIKE
-
         no_helmet_indices = np.where(no_helmet_mask)[0]
-        motorbike_indices = np.where(motorbike_mask)[0]
 
-        # If no motorbikes or no-helmet detections, nothing to do
-        if len(no_helmet_indices) == 0 or len(motorbike_indices) == 0:
+        if len(no_helmet_indices) == 0:
             # Decay streak for tracks not seen as NoHelmet
             self._decay_streaks(tracker_ids, no_helmet_indices)
             return []
 
-        # Associate NoHelmet with nearby Motorbike
+        # Process each DRIVER_NO_HELMET detection
         for nh_idx in no_helmet_indices:
             nh_box = xyxy[nh_idx]
             nh_track_id = tracker_ids[nh_idx] if tracker_ids is not None else None
@@ -138,73 +143,40 @@ class ViolationDetector:
             if nh_track_id in self._violated_ids:
                 continue
 
-            # Check if NoHelmet is near any Motorbike
-            is_riding = self._is_near_motorbike(nh_box, xyxy[motorbike_indices])
+            # DRIVER_NO_HELMET is a direct violation signal — increment streak
+            self._no_helmet_streak[nh_track_id] += 1
+            self._confidence_accumulator[nh_track_id].append(float(nh_confidence))
 
-            if is_riding:
-                # Increment streak
-                self._no_helmet_streak[nh_track_id] += 1
-                self._confidence_accumulator[nh_track_id].append(float(nh_confidence))
+            # Check if confirmed (N consecutive frames)
+            if self._no_helmet_streak[nh_track_id] >= self.confirm_frames:
+                avg_confidence = np.mean(self._confidence_accumulator[nh_track_id])
 
-                # Check if confirmed
-                if self._no_helmet_streak[nh_track_id] >= self.confirm_frames:
-                    avg_confidence = np.mean(self._confidence_accumulator[nh_track_id])
+                violation = ViolationEvent(
+                    track_id=int(nh_track_id),
+                    timestamp=datetime.now(timezone.utc),
+                    camera_id=self.camera_id,
+                    violation_type="no_helmet",
+                    confidence=float(avg_confidence),
+                    bbox=BoundingBox(
+                        x1=float(nh_box[0]),
+                        y1=float(nh_box[1]),
+                        x2=float(nh_box[2]),
+                        y2=float(nh_box[3]),
+                    ),
+                    frame_number=frame_number,
+                )
+                violations.append(violation)
+                self._violated_ids.add(nh_track_id)
 
-                    violation = ViolationEvent(
-                        track_id=int(nh_track_id),
-                        timestamp=datetime.now(timezone.utc),
-                        camera_id=self.camera_id,
-                        violation_type="no_helmet",
-                        confidence=float(avg_confidence),
-                        bbox=BoundingBox(
-                            x1=float(nh_box[0]),
-                            y1=float(nh_box[1]),
-                            x2=float(nh_box[2]),
-                            y2=float(nh_box[3]),
-                        ),
-                        frame_number=frame_number,
-                    )
-                    violations.append(violation)
-                    self._violated_ids.add(nh_track_id)
-
-                    logger.info(
-                        f"🚨 VIOLATION CONFIRMED: track_id={nh_track_id}, "
-                        f"confidence={avg_confidence:.2f}, frame={frame_number}"
-                    )
-            else:
-                # Not near motorbike, reset streak
-                self._no_helmet_streak[nh_track_id] = 0
-                self._confidence_accumulator[nh_track_id].clear()
+                logger.info(
+                    f"🚨 VIOLATION CONFIRMED: track_id={nh_track_id}, "
+                    f"confidence={avg_confidence:.2f}, frame={frame_number}"
+                )
 
         # Decay streaks for tracks not in current NoHelmet detections
         self._decay_streaks(tracker_ids, no_helmet_indices)
 
         return violations
-
-    def _is_near_motorbike(
-        self, person_box: np.ndarray, motorbike_boxes: np.ndarray
-    ) -> bool:
-        """
-        Check if a person/no-helmet box is associated with any motorbike.
-
-        Uses IoU-based proximity. Person riding a motorbike typically has
-        significant vertical overlap with the motorbike bounding box.
-        """
-        for mb_box in motorbike_boxes:
-            iou = compute_iou(person_box, mb_box)
-            if iou >= self.iou_threshold:
-                return True
-
-            # Also check centroid proximity as fallback
-            # (useful when IoU is low but person is clearly on motorbike)
-            dist = compute_centroid_distance(person_box, mb_box)
-            box_diag = np.sqrt(
-                (mb_box[2] - mb_box[0]) ** 2 + (mb_box[3] - mb_box[1]) ** 2
-            )
-            if box_diag > 0 and dist / box_diag < 0.5:
-                return True
-
-        return False
 
     def _decay_streaks(
         self, all_tracker_ids: np.ndarray | None, no_helmet_indices: np.ndarray

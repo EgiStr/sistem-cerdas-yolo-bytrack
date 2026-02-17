@@ -13,10 +13,11 @@ from config.settings import settings
 
 
 # Class mapping for the helmet detection model
+# Must match model output: {0: 'DRIVER_HELMET', 1: 'DRIVER_NO_HELMET', 2: 'MOTORCYCLE'}
 CLASS_NAMES = {
-    0: "Helmet",
-    1: "NoHelmet",
-    2: "Motorbike",
+    0: "DRIVER_HELMET",
+    1: "DRIVER_NO_HELMET",
+    2: "MOTORCYCLE",
 }
 
 
