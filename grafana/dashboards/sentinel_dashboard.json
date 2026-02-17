@@ -1,0 +1,269 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "📊 KPI Overview",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "red", "value": 50 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+      "id": 1,
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT COUNT(*) AS \"Total Pelanggaran Hari Ini\" FROM fact_violations WHERE date = CURRENT_DATE;",
+          "format": "table"
+        }
+      ],
+      "title": "🚨 Pelanggaran Hari Ini",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "percentunit",
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0.7 },
+              { "color": "green", "value": 0.9 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
+      "id": 2,
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT AVG(confidence) AS \"Avg Confidence\" FROM fact_violations WHERE date = CURRENT_DATE;",
+          "format": "table"
+        }
+      ],
+      "title": "🎯 Avg Confidence",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "ms",
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 500 },
+              { "color": "red", "value": 1000 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
+      "id": 3,
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT AVG(processing_latency_ms) AS \"Avg Latency\" FROM fact_violations WHERE date = CURRENT_DATE;",
+          "format": "table"
+        }
+      ],
+      "title": "⚡ Avg Latency",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+      "id": 4,
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT COUNT(*) AS \"Total Semua\" FROM fact_violations;",
+          "format": "table"
+        }
+      ],
+      "title": "📈 Total Pelanggaran (All Time)",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "id": 101,
+      "title": "📈 Tren & Distribusi",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "pointSize": 5,
+            "showPoints": "auto"
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 16, "x": 0, "y": 6 },
+      "id": 5,
+      "options": {
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT date_trunc('hour', created_at) AS time, COUNT(*) AS violations FROM fact_violations WHERE created_at >= NOW() - INTERVAL '24 hours' GROUP BY 1 ORDER BY 1;",
+          "format": "time_series"
+        }
+      ],
+      "title": "📊 Tren Pelanggaran per Jam (24 Jam Terakhir)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 80 }
+        }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 6 },
+      "id": 6,
+      "targets": [
+        {
+          "rawSql": "SELECT camera_id, COUNT(*) AS violations FROM fact_violations WHERE date = CURRENT_DATE GROUP BY camera_id ORDER BY violations DESC;",
+          "format": "table"
+        }
+      ],
+      "title": "📍 Distribusi per Kamera",
+      "type": "barchart"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "id": 102,
+      "title": "🔥 Heatmap & Pola",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "continuous-YlOrRd" },
+          "custom": { "fillOpacity": 70 }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "id": 7,
+      "targets": [
+        {
+          "rawSql": "SELECT hour, CASE day_of_week WHEN 1 THEN 'Minggu' WHEN 2 THEN 'Senin' WHEN 3 THEN 'Selasa' WHEN 4 THEN 'Rabu' WHEN 5 THEN 'Kamis' WHEN 6 THEN 'Jumat' WHEN 7 THEN 'Sabtu' END AS hari, COUNT(*) AS violations FROM fact_violations GROUP BY hour, day_of_week ORDER BY day_of_week, hour;",
+          "format": "table"
+        }
+      ],
+      "title": "🔥 Heatmap: Jam × Hari",
+      "type": "heatmap"
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 60 }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+      "id": 8,
+      "targets": [
+        {
+          "rawSql": "SELECT time_period, COUNT(*) AS violations FROM fact_violations GROUP BY time_period ORDER BY CASE time_period WHEN 'pagi' THEN 1 WHEN 'siang' THEN 2 WHEN 'sore' THEN 3 WHEN 'malam' THEN 4 END;",
+          "format": "table"
+        }
+      ],
+      "title": "🕐 Distribusi per Waktu (Pagi/Siang/Sore/Malam)",
+      "type": "piechart"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+      "id": 103,
+      "title": "📋 Log Detail",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "id": 9,
+      "options": {
+        "showHeader": true,
+        "sortBy": [{ "displayName": "Waktu", "desc": true }]
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT created_at AS \"Waktu\", camera_id AS \"Kamera\", violation_type AS \"Tipe\", ROUND(confidence::numeric, 2) AS \"Confidence\", track_id AS \"Track ID\", ROUND(processing_latency_ms::numeric, 1) AS \"Latency (ms)\", time_period AS \"Periode\" FROM fact_violations ORDER BY created_at DESC LIMIT 50;",
+          "format": "table"
+        }
+      ],
+      "title": "📋 50 Pelanggaran Terakhir",
+      "type": "table"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["sentinel", "itera", "safety"],
+  "templating": { "list": [] },
+  "time": { "from": "now-24h", "to": "now" },
+  "timepicker": {},
+  "timezone": "Asia/Jakarta",
+  "title": "ITERA Smart Sentinel - Safety Dashboard",
+  "uid": "sentinel-main",
+  "version": 1,
+  "weekStart": "monday"
+}
