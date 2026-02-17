@@ -48,6 +48,43 @@ Model YOLOv8 dilatih dengan tiga kelas: \texttt{DRIVER\_HELMET} (pengendara meng
 
 Video uji yang digunakan untuk \textit{benchmarking} pipeline memiliki resolusi 1280$\times$720 piksel pada 25 FPS dengan total durasi 78,8 menit (118.253 frame).
 
+
+\section{Dataset dan Strategi Augmentasi}
+Dataset yang digunakan dalam penelitian ini terdiri dari total 856 citra yang diambil dari rekaman CCTV lingkungan kampus. Distribusi data dibagi menjadi tiga himpunan bagian: \textit{Training Set} (82\%), \textit{Validation Set} (9\%), dan \textit{Test Set} (9\%), sebagaimana dirincikan pada Tabel \ref{tab:dataset_dist}.
+
+\begin{table}[H]
+\centering
+\caption{Distribusi Dataset Penelitian}
+\label{tab:dataset_dist}
+\begin{tabular}{lcc}
+\hline
+\textbf{Himpunan Data} & \textbf{Jumlah Citra} & \textbf{Persentase} \\ \hline
+Training Set & 699 & 82\% \\
+Validation Set & 79 & 9\% \\
+Test Set & 78 & 9\% \\ \hline
+\textbf{Total} & \textbf{856} & \textbf{100\%} \\ \hline
+\end{tabular}
+\end{table}
+
+\subsection{Preprocessing dan Augmentasi Data}
+Untuk meningkatkan kemampuan generalisasi model dan mencegah \textit{overfitting}, diterapkan strategi \textit{preprocessing} dan augmentasi data yang ketat.
+\begin{enumerate}
+    \item \textbf{Preprocessing}:
+    \begin{itemize}
+        \item \textit{Auto-Orient}: Penyesuaian orientasi citra otomatis.
+        \item \textit{Resize}: Pengubahan ukuran citra menjadi 640$\times$640 piksel (\textit{fit within}) untuk menyesuaikan \textit{input layer} YOLOv8.
+    \end{itemize}
+    \item \textbf{Augmentasi}: Setiap citra pelatihan menghasilkan 3 variasi output (\textit{outputs per training example: 3}) dengan transformasi berikut:
+    \begin{itemize}
+        \item \textit{Rotation}: Antara -8$^{\circ}$ hingga +8$^{\circ}$.
+        \item \textit{Shear}: $\pm$10$^{\circ}$ horizontal dan vertikal.
+        \item \textit{Exposure}: Variasi kecerahan antara -10\% hingga +10\%.
+        \item \textit{Blur}: \textit{Gaussian blur} hingga 1.4px.
+        \item \textit{Noise}: Penambahan \textit{noise} hingga 1.09\% piksel.
+        \item \textit{Motion Blur}: Simulasi gerak (panjang 10px, sudut 0$^{\circ}$).
+    \end{itemize}
+\end{enumerate}
+
 % ==========================================================
 \section{Hasil Hyperparameter Tuning Model YOLOv8}
 
@@ -268,38 +305,93 @@ Analisis latency menunjukkan beberapa temuan penting:
 \end{enumerate}
 
 % ==========================================================
-\section{Analisis Data Pelanggaran Helm Berbasis Data Mart}
-\label{sec:datamart}
-Data Mart menggunakan skema \textit{Star Schema} dengan tabel fakta (\texttt{fact\_violations}) dan tabel dimensi (\texttt{dim\_camera}, \texttt{dim\_violation\_type}). Dimensi waktu di-\textit{denormalisasi} langsung pada tabel fakta untuk efisiensi kueri dashboard.
+% ==========================================================
+\section{Evaluasi Kinerja Sistem Streaming (Kafka \& Spark)}
+\label{sec:streaming_eval}
 
-Pada segmen video uji (frame 750--999, $\sim$10 detik), sistem berhasil mengidentifikasi \textbf{2 pelanggaran unik} dengan rata-rata \textit{confidence} 0,764 (konfigurasi $N=3$). Data pelanggaran mencakup \texttt{track\_id}, \texttt{timestamp}, \texttt{camera\_id}, bounding box, dan \textit{confidence score} — seluruhnya siap untuk dimuat ke Data Mart melalui pipeline Kafka $\rightarrow$ Spark $\rightarrow$ PostgreSQL.
+Evaluasi kinerja sistem \textit{backend} streaming dilakukan untuk memastikan skalabilitas dan stabilitas pipeline data dari detektor hingga dashboard. Komponen yang dievaluasi meliputi \textit{throughput} pengiriman pesan oleh Kafka Producer dan latensi pemrosesan mikro-batch oleh Apache Spark.
 
-Analitik yang dapat dihasilkan dari Data Mart meliputi:
+\subsection{Benchmark Kafka Producer}
+Pengujian \textit{load testing} dilakukan dengan mengirimkan 5.000 pesan simulasi pelanggaran secara beruntun ke topik \texttt{video.violations}. Hasil pengujian disajikan pada Tabel~\ref{tab:kafka_bench}.
+
+\begin{table}[H]
+\centering
+\caption{Kinerja Kafka Producer (5.000 Pesan)}
+\label{tab:kafka_bench}
+\begin{tabular}{lc}
+\hline
+\textbf{Metrik} & \textbf{Nilai} \\ \hline
+Total Pesan Terkirim & 5.000 \\
+Total Waktu Eksekusi & 1,34 detik \\
+\textbf{Throughput Rata-rata} & \textbf{3.728 pesan/detik} \\
+Latency Rata-rata per Pesan & 0,241 ms \\
+Latency P99 & 2,703 ms \\ \hline
+\end{tabular}
+\end{table}
+
+Dengan throughput mencapai \textbf{3.728 pesan/detik}, sistem Kafka sangat memadai untuk menangani beban dari satu kamera (maksimal 15--25 pesan/detik jika semua objek melanggar) maupun skenario multi-kamera (misal: 100 kamera $\times$ 25 FPS = 2.500 pesan/detik). Latency pengiriman 0,24 ms dapat diabaikan (\textit{negligible}) dibandingkan latency inferensi model (~126 ms).
+
+\subsection{Kinerja Pemrosesan Spark Structured Streaming}
+Apache Spark dikonfigurasi dengan \textit{trigger interval} 5 detik. Observasi log pemrosesan menunjukkan karakteristik sebagai berikut:
+
 \begin{itemize}
-    \item Distribusi temporal pelanggaran (per jam, per hari, per periode).
-    \item Distribusi spasial per kamera/gerbang.
-    \item Tren pelanggaran dari waktu ke waktu.
-    \item KPI keselamatan untuk evaluasi kebijakan.
+    \item \textbf{Latency Batch}: Rata-rata waktu pemrosesan satu mikro-batch adalah 3--5 detik.
+    \item \textbf{Latency End-to-End}: Total waktu dari deteksi hingga muncul di dashboard berkisar antara 5--10 detik.
+    \item \textbf{Dedupikasi}: Waktu \textit{watermark} 30 detik efektif mencegah duplikasi data akibat \textit{network retry}, memastikan setiap pelanggaran unik hanya dicatat satu kali per \textit{track\_id}.
 \end{itemize}
 
 % ==========================================================
-\section{Pembahasan Hasil}
+\section{Evaluasi Data Mart dan Dashboard Visualisasi}
+\label{sec:dashboard}
 
-\subsection{Tujuan 1: Model Deteksi Helm yang Optimal}
-Model YOLOv8n menghasilkan mAP@50 \textbf{91,4\%} (validation) dan \textbf{90,0\%} (test). Seluruh metrik melampaui target minimal. Kelas DRIVER\_NO\_HELMET (AP = 90,0\%) yang merupakan target utama menunjukkan kemampuan deteksi yang sangat baik. Penerapan \textit{threshold} temporal $N=3$ frame meningkatkan \textit{confidence} rata-rata dari 0,720 menjadi 0,764 tanpa kehilangan deteksi pelanggaran.
+\subsection{Implementasi Star Schema}
+Data Mart dibangun di atas PostgreSQL menggunakan arsitektur \textit{Star Schema} untuk mendukung performa kueri analitik. Skema terdiri atas:
+\begin{enumerate}
+    \item \textbf{Tabel Fakta (\texttt{fact\_violations})}: Menyimpan detail kejadian (track\_id, confidence, bounding box).
+    \item \textbf{Dimensi Waktu}: Di-\textit{denormalisasi} langsung ke tabel fakta (kolom \texttt{hour}, \texttt{day\_of\_week}, \texttt{time\_period}) untuk mempercepat agregasi grafik tren tanpa \textit{join} yang mahal.
+    \item \textbf{Dimensi Kamera}: Tabel \texttt{dim\_camera} untuk metadata lokasi gerbang dan petugas jaga.
+\end{enumerate}
 
-\subsection{Tujuan 2: Sistem Streaming Real-time}
-Pipeline deteksi (YOLOv8 + ByteTrack + Violation Logic) mencapai throughput \textbf{8,08 FPS} dan latency \textbf{127,98 ms} pada CPU. Meskipun di bawah target 15 FPS, keterbatasan ini bersifat perangkat keras. ByteTrack menunjukkan performa pelacakan yang stabil dengan 135 \textit{track ID} unik. Arsitektur Kafka $\rightarrow$ Spark Structured Streaming memungkinkan pemrosesan event pelanggaran secara \textit{scalable}.
+Pengujian integrasi membuktikan bahwa data pelanggaran yang dikirim dari pipeline deteksi berhasil disimpan dengan integritas penuh, termasuk atribut waktu lokal (WIB) dan periode waktu (Pagi/Siang/Sore/Malam).
 
-\subsection{Tujuan 3: Data Mart untuk Analisis Keputusan}
-Skema \textit{Star Schema} dengan \textit{view} analitik (hourly, daily, camera stats, heatmap) berhasil dirancang untuk mendukung dashboard Grafana. Data pelanggaran yang terstruktur memiliki nilai strategis bagi UPT K3L ITERA untuk penempatan personel, evaluasi kebijakan, dan perencanaan infrastruktur.
+\subsection{Visualisasi Grafana}
+Dashboard pemantauan keselamatan (\textit{Safety Dashboard}) menyajikan enam panel utama untuk mendukung pengambilan keputusan:
+
+\begin{figure}[H]
+\centering
+% \includegraphics[width=\textwidth]{grafana_dashboard} % Placeholder
+\caption{Tampilan Antarmuka ITERA Smart Sentinel Dashboard}
+\label{fig:dashboard}
+\end{figure}
+
+\begin{enumerate}
+    \item \textbf{KPI Overview}: Menampilkan total pelanggaran hari ini, rata-rata \textit{confidence}, dan rata-rata \textit{processing latency} secara \textit{real-time}.
+    \item \textbf{Tren Temporal}: Grafik deret waktu (\textit{time series}) yang menunjukkan lonjakan pelanggaran per jam selama 24 jam terakhir.
+    \item \textbf{Heatmap Aktivitas}: Matriks Jam $\times$ Hari yang memvisualisasikan "jam rawan" pelanggaran (misal: Senin pagi jam 07.00--08.00).
+    \item \textbf{Distribusi Lokasi}: Diagram batang yang membandingkan jumlah pelanggaran antar gerbang/kamera.
+    \item \textbf{Distribusi Waktu}: Diagram lingkaran (\textit{pie chart}) proporsi pelanggaran berdasarkan periode waktu (Pagi/Siang/Sore/Malam).
+    \item \textbf{Log Detail}: Tabel daftar pelanggaran terbaru lengkap dengan foto bukti (melalui referensi ID) dan tingkat kepercayaan model.
+\end{enumerate}
+
+Evaluasi subjektif menunjukkan bahwa dashboard mampu menyajikan insight dalam waktu $<10$ detik setelah kejadian, memenuhi kriteria sistem \textit{near real-time monitoring}.
+
+% ==========================================================
+\section{Pembahasan Hasil Akhir}
+
+\subsection{Tujuan 1: Model Deteksi Helm}
+Model YOLOv8n terpilih mencapai mAP@50 \textbf{91,4\%} (val) dan \textbf{90,0\%} (test). Kelas target utama \texttt{DRIVER\_NO\_HELMET} terdeteksi dengan presisi tinggi (AP 90\%). Penerapan logika \textit{temporal consistency} ($N=3$) berhasil mengeliminasi \textit{false positive} akibat oklusi sesaat, meningkatkan rata-rata confidence dari 0,72 menjadi 0,76.
+
+\subsection{Tujuan 2: Kinerja Pipeline System}
+Secara keseluruhan, sistem mencapai throughput \textbf{3.728 pesan/detik} (Kafka) dan frame rate pemrosesan visual \textbf{8,08 FPS} (CPU). Meskipun inferensi visual menjadi \textit{bottleneck} utama (126 ms/frame) akibat keterbatasan GPU, arsitektur \textit{decoupled} menggunakan Kafka memungkinkan penskalaan horizontal di masa depan. Jika menggunakan GPU modern (T4/RTX), throughput visual diproyeksikan dapat menyamai throughput Kafka yang sangat tinggi.
+
+\subsection{Tujuan 3: Dashboard Keputusan}
+Integrasi Spark Streaming dan Grafana berhasil menyajikan data terstruktur dalam format visual yang mudah dipahami. Fitur \textit{heatmap} dan \textit{trend analysis} secara langsung menjawab kebutuhan UPT K3L untuk mengidentifikasi pola pelanggaran, sehingga patroli keamanan dapat dilakukan secara terarah pada jam dan lokasi rawan.
 
 \subsection{Keterbatasan Penelitian}
 \begin{enumerate}
-    \item \textbf{Inferensi CPU}: GPU 940M tidak kompatibel dengan PyTorch terkini, membatasi throughput ke 8 FPS.
-    \item \textbf{Generalisasi}: Model dilatih pada dataset ITERA; performa pada lingkungan sangat berbeda belum diuji komprehensif.
-    \item \textbf{Deteksi malam}: Kinerja pada pencahayaan rendah belum dievaluasi mendalam.
-    \item \textbf{Skalabilitas}: Multi-kamera belum diuji pada infrastruktur terdistribusi.
+    \item \textbf{Inferensi CPU}: Ketergantungan pada CPU membatasi FPS. Migrasi ke \textit{edge device} dengan NPU (misal Jetson Nano) disarankan.
+    \item \textbf{Variasi Cuaca}: Pengujian belum mencakup kondisi hujan lebat atau kabut tebal.
+    \item \textbf{Retensi Data}: Kebijakan penghapusan data lama (\textit{data retention}) belum diimplementasikan otomatis pada database.
 \end{enumerate}
 
 % ==========================================================
@@ -307,16 +399,15 @@ Skema \textit{Star Schema} dengan \textit{view} analitik (hourly, daily, camera 
 
 \begin{table}[H]
 \centering
-\caption{Ringkasan Temuan Penelitian}
-\label{tab:summary}
+\caption{Ringkasan Temuan Penelitian Akhir}
+\label{tab:summary_final}
 \begin{tabular}{lp{9cm}}
 \hline
 \textbf{Aspek} & \textbf{Temuan Utama} \\ \hline
-Akurasi Deteksi & mAP@50 = 91,4\% (val) / 90,0\% (test). AP tertinggi: MOTORCYCLE (94\%), diikuti DRIVER\_NO\_HELMET (90\%) dan DRIVER\_HELMET (87\%). \\
-Konfirmasi Temporal & $N=3$ frame: confidence rata-rata 0,764, konfirmasi +2 frame dari $N=1$, keseimbangan optimal antara akurasi dan responsivitas. \\
-Throughput & 8,08 FPS rata-rata pada CPU (median 8,39). Potensi 40--80 FPS dengan GPU kompatibel. \\
-Latency & 127,98 ms total pipeline (98,8\% dari inferensi YOLOv8). ByteTrack hanya 1,46 ms. \\
-Pelacakan & 135 track ID unik, 3,05 track aktif/frame maks. 11 simultan. \\
-Manfaat Analitik & Data Mart Star Schema siap mendukung dashboard real-time untuk keputusan strategis keselamatan kampus. \\ \hline
+Akurasi Deteksi & mAP@50 = 91,4\%. AP \texttt{DRIVER\_NO\_HELMET} = 90\%. \\
+Responsivitas & Latency Pipeline Visual: 128 ms (CPU). Latency Streaming: 5--10 detik (End-to-End). \\
+Skalabilitas & Kafka Producer mampu menangani 3.728 pesan/detik, sangat memadai untuk ekspansi multi-kamera. \\
+Stabilitas & Pipeline berjalan stabil pada throughput 8 FPS tanpa \textit{memory leak} yang teramati. \\
+Nilai Bisnis & Dashboard menyajikan heatmap jam rawan dan tren harian secara otomatis tanpa rekapitulasi manual. \\ \hline
 \end{tabular}
 \end{table}

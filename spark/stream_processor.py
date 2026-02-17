@@ -22,9 +22,20 @@ from pyspark.sql.types import (
     StringType, IntegerType, FloatType, TimestampType,
 )
 
-# Load environment variables
-from dotenv import load_dotenv
-load_dotenv()
+# Load environment variables (handle Spark's system Python without dotenv)
+import pathlib
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # Manual .env parsing for Spark (runs in system Python, not uv venv)
+    env_file = pathlib.Path(__file__).resolve().parent.parent / ".env"
+    if env_file.exists():
+        for line in env_file.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, _, val = line.partition("=")
+                os.environ.setdefault(key.strip(), val.strip())
 
 # ─── Configuration ─────────────────────────────────────────────
 KAFKA_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
