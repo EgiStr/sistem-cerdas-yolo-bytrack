@@ -183,9 +183,11 @@ class ViolationDetector:
                     is_riding = True
                     break
 
-            if not is_riding and len(motorcycle_indices) > 0:
-                # If there are motorcycles but this person doesn't overlap with any, they might be a pedestrian (False Positive)
-                # We skip incrementing their violation streak.
+            if not is_riding:
+                # No spatial association with any motorcycle — this person is
+                # likely a pedestrian or false positive.  Never count towards
+                # a violation regardless of whether motorcycles are visible
+                # in the current frame.
                 continue
 
             # DRIVER_NO_HELMET confirmed — increment streak and reset missing count

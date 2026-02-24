@@ -1,0 +1,580 @@
+% ============================================================
+% BAB IV — HASIL DAN PEMBAHASAN
+% ITERA Smart Sentinel: Sistem Deteksi & Analitik Pelanggaran Helm Real-time
+% ============================================================
+
+\chapter{HASIL DAN PEMBAHASAN}
+\label{chap:hasil}
+
+Bab ini memaparkan hasil pengembangan dan evaluasi menyeluruh terhadap sistem \textit{ITERA Smart Sentinel}, suatu arsitektur terintegrasi yang menggabungkan model deteksi objek YOLOv8, algoritma pelacakan multi-objek ByteTrack, serta pipeline \textit{streaming} berbasis Apache Kafka dan Spark Structured Streaming untuk deteksi pelanggaran helm secara \textit{real-time} di lingkungan Institut Teknologi Sumatera. Pembahasan diorganisasikan secara sistematis mengikuti tiga tujuan penelitian yang telah ditetapkan: (1) pengembangan dan evaluasi model deteksi helm, (2) integrasi komponen deteksi dan pelacakan dalam pipeline pemrosesan \textit{real-time}, serta (3) implementasi \textit{data mart} analitik untuk mendukung pengambilan keputusan keselamatan berbasis data. Setiap komponen dievaluasi secara kuantitatif menggunakan metrik standar yang relevan, disertai analisis kualitatif terhadap temuan empiris yang diperoleh selama pengujian.
+
+% ============================================================
+\section{Pengembangan Model Deteksi Helm Berbasis YOLOv8}
+\label{sec:model-deteksi}
+% ============================================================
+
+Pengembangan model deteksi helm dalam penelitian ini difokuskan pada optimalisasi arsitektur YOLOv8 untuk mengidentifikasi kepatuhan penggunaan helm pada pengendara sepeda motor di lingkungan kampus Institut Teknologi Sumatera. Proses pengembangan mencakup akuisisi dan preparasi dataset, konfigurasi pelatihan model dengan pendekatan \textit{transfer learning}, serta evaluasi kinerja deteksi pada skenario operasional berbasis rekaman CCTV.
+
+% ------------------------------------------------------------
+\subsection{Akuisisi Dataset dan Strategi \textit{Preprocessing}}
+\label{subsec:dataset}
+% ------------------------------------------------------------
+
+Proses akuisisi dataset dilaksanakan melalui perekaman kamera CCTV statis di Gerbang Utama Institut Teknologi Sumatera selama dua hari berturut-turut, menghasilkan 400 citra yang merepresentasikan variasi kondisi lalu lintas dan pencahayaan kampus. Setiap citra dianotasi menggunakan pendekatan \textit{Virtual Region of Interest} (ROI) dengan tiga kelas objek sebagaimana didefinisikan pada Tabel~\ref{tab:kelas-objek}. Selanjutnya, strategi augmentasi data diterapkan untuk memperkaya distribusi visual, menghasilkan tiga variasi per sampel melalui kombinasi rotasi $\pm 8°$, \textit{shear} $\pm 10°$, variasi \textit{exposure} $\pm 10\%$, \textit{Gaussian blur} hingga 1,4 piksel, \textit{noise} hingga 1,09\%, dan \textit{motion blur} 10 piksel. Contoh hasil augmentasi diilustrasikan pada Gambar~\ref{fig:augmentasi}.
+
+\begin{table}[htbp]
+\centering
+\caption{Kelas objek pada model deteksi helm YOLOv8.}
+\label{tab:kelas-objek}
+\begin{tabular}{cll}
+\hline
+\textbf{ID Kelas} & \textbf{Nama Kelas} & \textbf{Deskripsi} \\
+\hline
+0 & \texttt{DRIVER\_HELMET}     & Pengendara motor menggunakan helm \\
+1 & \texttt{DRIVER\_NO\_HELMET} & Pengendara motor tanpa helm \\
+2 & \texttt{MOTORCYCLE}         & Kendaraan sepeda motor \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+% \includegraphics[width=0.95\textwidth]{gambar/augmentasi_contoh.png}
+\fbox{\parbox{0.9\textwidth}{\centering\vspace{3cm}\textit{Placeholder: Contoh hasil augmentasi data --- citra asli, rotasi, blur, dan variasi exposure}\vspace{3cm}}}
+\caption{Contoh hasil augmentasi data pelatihan model deteksi helm.}
+\label{fig:augmentasi}
+\end{figure}
+
+Pemilihan strategi augmentasi tersebut dilandasi oleh karakteristik tantangan visual yang inheren pada citra CCTV luar ruang, yakni fluktuasi pencahayaan akibat dinamika cuaca, oklusi parsial antar-kendaraan, serta degradasi citra akibat \textit{motion blur} pada objek bergerak \cite{shorten2019survey}. Kualitas dan keberagaman dataset merupakan faktor determinan dalam pengembangan model deteksi objek berbasis \textit{deep learning} \cite{zou2023object}, sehingga simulasi sintetis terhadap kondisi operasional secara empiris meningkatkan kapabilitas generalisasi model. Penerapan pendekatan ROI untuk membatasi area deteksi pada jalur kendaraan secara efektif mereduksi \textit{noise} latar belakang dan meningkatkan relevansi anotasi, sejalan dengan rekomendasi praktik terbaik pada domain surveilans berbasis \textit{computer vision} \cite{patrikar2022anomaly}.
+
+% ------------------------------------------------------------
+\subsection{Konfigurasi Pelatihan Model dan \textit{Transfer Learning}}
+\label{subsec:pelatihan}
+% ------------------------------------------------------------
+
+Model deteksi dikembangkan menggunakan arsitektur YOLOv8 dengan pendekatan \textit{transfer learning} dari bobot awal (\textit{pre-trained weights}) dataset COCO. Komposisi dataset pelatihan terdiri dari 800 citra latih (setelah augmentasi tiga kali lipat), 80 citra validasi, dan 80 citra uji. Konfigurasi hiperparameter utama yang digunakan selama pelatihan dirangkum secara komprehensif pada Tabel~\ref{tab:config-pelatihan}, dengan resolusi input ditetapkan pada $640 \times 640$ piksel, \textit{confidence threshold} 0,5, dan IoU \textit{threshold} 0,45.
+
+\begin{table}[htbp]
+\centering
+\caption{Konfigurasi pelatihan model YOLOv8.}
+\label{tab:config-pelatihan}
+\begin{tabular}{ll}
+\hline
+\textbf{Parameter} & \textbf{Nilai} \\
+\hline
+Arsitektur          & YOLOv8 (Ultralytics) \\
+\textit{Pretrained backbone} & COCO \\
+Ukuran input        & $640 \times 640$ piksel \\
+\textit{Confidence threshold} & 0,5 \\
+IoU \textit{threshold}       & 0,45 \\
+\textit{Framework}           & Ultralytics v8.3+ \\
+\hline
+\end{tabular}
+\end{table}
+
+Pemilihan arsitektur YOLOv8 dilandasi oleh keunggulannya dalam menyeimbangkan akurasi dan efisiensi inferensi pada skenario deteksi \textit{real-time} \cite{jocher2023ultralytics}. Penerapan \textit{transfer learning} dari bobot COCO memungkinkan model mewarisi representasi fitur visual tingkat rendah dan menengah yang telah dipelajari dari dataset berskala besar, sehingga mempercepat konvergensi dan meningkatkan akurasi pada domain spesifik deteksi helm meskipun dengan dataset penelitian yang relatif terbatas (400 citra dasar) \cite{zhuang2020comprehensive}. Penetapan resolusi input $640 \times 640$ piksel merupakan hasil pertimbangan \textit{trade-off} antara kemampuan pengenalan objek berukuran kecil dan \textit{latency} inferensi; dalam konteks pemrosesan \textit{near real-time} pada perangkat komputasi terbatas, konfigurasi ini dinilai optimal sebagaimana direkomendasikan dalam literatur deteksi objek untuk aplikasi \textit{edge computing} \cite{chen2023edge}.
+
+% ------------------------------------------------------------
+\subsection{Evaluasi Kinerja Model Deteksi}
+\label{subsec:evaluasi-deteksi}
+% ------------------------------------------------------------
+
+Evaluasi model pada subset data uji menghasilkan mAP@50 sebesar 90,0\% dengan \textit{precision} 87,5\% dan \textit{recall} 86,5\%, sebagaimana dirangkum pada Tabel~\ref{tab:evaluasi-model}. Analisis per kelas pada Tabel~\ref{tab:ap-per-kelas} menunjukkan hierarki performa: \texttt{MOTORCYCLE} mencapai AP tertinggi (94,0\%), diikuti \texttt{DRIVER\_NO\_HELMET} (90,0\%) dan \texttt{DRIVER\_HELMET} (87,0\%). Matriks konfusi dan kurva \textit{precision--recall} per kelas divisualisasikan masing-masing pada Gambar~\ref{fig:confusion-matrix} dan Gambar~\ref{fig:pr-curve}.
+
+\begin{table}[htbp]
+\centering
+\caption{Hasil evaluasi kinerja model deteksi helm YOLOv8 pada data uji.}
+\label{tab:evaluasi-model}
+\begin{tabular}{lc}
+\hline
+\textbf{Metrik} & \textbf{Nilai} \\
+\hline
+mAP@50 keseluruhan & 90,0\% \\
+\textit{Precision}  & 87,5\% \\
+\textit{Recall}     & 86,5\% \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{\textit{Average Precision} per kelas objek pada evaluasi model.}
+\label{tab:ap-per-kelas}
+\begin{tabular}{lc}
+\hline
+\textbf{Kelas} & \textbf{AP@50} \\
+\hline
+\texttt{MOTORCYCLE}         & 94,0\% \\
+\texttt{DRIVER\_NO\_HELMET} & 90,0\% \\
+\texttt{DRIVER\_HELMET}     & 87,0\% \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+% \includegraphics[width=0.85\textwidth]{gambar/confusion_matrix.png}
+\fbox{\parbox{0.85\textwidth}{\centering\vspace{4cm}\textit{Placeholder: Confusion matrix model YOLOv8 pada data uji}\vspace{4cm}}}
+\caption{\textit{Confusion matrix} model deteksi helm YOLOv8 pada data uji.}
+\label{fig:confusion-matrix}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+% \includegraphics[width=0.85\textwidth]{gambar/precision_recall_curve.png}
+\fbox{\parbox{0.85\textwidth}{\centering\vspace{4cm}\textit{Placeholder: Kurva precision--recall per kelas}\vspace{4cm}}}
+\caption{Kurva \textit{precision--recall} per kelas objek pada model deteksi helm.}
+\label{fig:pr-curve}
+\end{figure}
+
+Capaian mAP@50 sebesar 90,0\% secara signifikan melampaui target minimal penelitian (mAP $\geq$ 80\%) dan mendemonstrasikan efektivitas pendekatan \textit{transfer learning} dari COCO pada domain deteksi helm \cite{padilla2020survey}. Hierarki performa antar-kelas konsisten dengan kompleksitas visual masing-masing kategori: kelas \texttt{MOTORCYCLE} memperoleh AP tertinggi karena konsistensi bentuk geometris dan ukuran objek yang besar, memudahkan ekstraksi fitur diskriminatif oleh jaringan konvolusi. Kelas target utama \texttt{DRIVER\_NO\_HELMET} yang mencapai AP 90,0\% mendemonstrasikan sensitivitas model yang memadai untuk identifikasi pelanggaran. AP terendah pada kelas \texttt{DRIVER\_HELMET} (87,0\%) dapat diatribusikan pada tingginya variabilitas bentuk, warna, dan ukuran helm serta oklusi parsial wajah pengendara, suatu tantangan yang lazim ditemui dalam literatur deteksi \textit{personal protective equipment} (PPE) \cite{wang2021helmet}. Secara keseluruhan, keseimbangan antara \textit{precision} dan \textit{recall} yang ditunjukkan model mengonfirmasi bahwa konfigurasi pelatihan yang diterapkan menghasilkan model dengan generalisasi yang baik tanpa mengalami \textit{overfitting} signifikan.
+
+% ------------------------------------------------------------
+\subsection{Distribusi Deteksi pada Skenario Operasional}
+\label{subsec:distribusi-deteksi}
+% ------------------------------------------------------------
+
+Validasi model pada skenario operasional dilakukan melalui pengujian \textit{benchmark} pada video uji berdurasi 3.000 \textit{frame} (resolusi $1280 \times 720$, 25 FPS). Hasil distribusi deteksi per kelas yang tercatat selama \textit{benchmark} disajikan pada Tabel~\ref{tab:distribusi-deteksi}. Model mendeteksi total 9.375 objek dengan rerata 3,12 objek per \textit{frame}, terdiri dari 4.059 deteksi \texttt{DRIVER\_HELMET} (1,35/\textit{frame}), 1.494 deteksi \texttt{DRIVER\_NO\_HELMET} (0,50/\textit{frame}), dan 3.822 deteksi \texttt{MOTORCYCLE} (1,27/\textit{frame}).
+
+\begin{table}[htbp]
+\centering
+\caption{Distribusi deteksi per kelas pada video uji (3.000 \textit{frame}).}
+\label{tab:distribusi-deteksi}
+\begin{tabular}{lrr}
+\hline
+\textbf{Kelas} & \textbf{Total Deteksi} & \textbf{Rata-rata per \textit{Frame}} \\
+\hline
+\texttt{DRIVER\_HELMET}     & 4.059 & 1,35 \\
+\texttt{DRIVER\_NO\_HELMET} & 1.494 & 0,50 \\
+\texttt{MOTORCYCLE}         & 3.822 & 1,27 \\
+\hline
+\textbf{Total}              & 9.375 & 3,12 \\
+\hline
+\end{tabular}
+\end{table}
+
+Rasio antara kelas \texttt{DRIVER\_HELMET} dan \texttt{DRIVER\_NO\_HELMET} sebesar 2,72:1 mengindikasikan bahwa mayoritas pengendara pada lokasi uji telah mematuhi kewajiban penggunaan helm. Meskipun demikian, proporsi pelanggaran yang mencapai 26,9\% dari total deteksi pengendara merupakan angka yang cukup signifikan dan memperkuat justifikasi kebutuhan akan sistem pemantauan otomatis berbasis \textit{computer vision} \cite{jia2021real}. Rerata 3,12 objek per \textit{frame} merepresentasikan kepadatan lalu lintas sedang yang konsisten dengan karakteristik gerbang kampus, suatu kondisi yang relatif \textit{favorable} bagi model deteksi karena meminimalkan oklusi antar-objek. Dalam konteks perbandingan dengan studi sejenis pada lingkungan lalu lintas perkotaan yang lebih padat \cite{kumar2021helmet}, tingkat deteksi per \textit{frame} pada penelitian ini tergolong moderat dan memungkinkan pelacakan objek yang lebih stabil.
+
+% ------------------------------------------------------------
+\subsection{Analisis Kesalahan dan Keterbatasan Deteksi}
+\label{subsec:analisis-kesalahan}
+% ------------------------------------------------------------
+
+Analisis kualitatif terhadap hasil deteksi pada video uji mengidentifikasi tiga kategori kesalahan sistematis: (1) \textit{false negative} pada kondisi oklusi parsial akibat sudut kamera atau interferensi kendaraan lain, (2) \textit{false positive} yang dipicu oleh objek dengan karakteristik visual menyerupai helm seperti topi atau pantulan sinar matahari, dan (3) \textit{misclassification} antar-kelas helm dan tanpa-helm pada pengendara berjarak jauh dengan resolusi efektif rendah. Contoh visual dari ketiga kategori kesalahan tersebut diilustrasikan pada Gambar~\ref{fig:kesalahan-deteksi}.
+
+\begin{figure}[htbp]
+\centering
+% \includegraphics[width=0.95\textwidth]{gambar/contoh_kesalahan_deteksi.png}
+\fbox{\parbox{0.9\textwidth}{\centering\vspace{3cm}\textit{Placeholder: Contoh kesalahan deteksi --- false positive, false negative, dan misklasifikasi}\vspace{3cm}}}
+\caption{Contoh kesalahan deteksi model pada citra CCTV: (a) \textit{false negative} akibat oklusi, (b) \textit{false positive} akibat objek serupa, (c) misklasifikasi pada jarak jauh.}
+\label{fig:kesalahan-deteksi}
+\end{figure}
+
+Ketiga kategori kesalahan tersebut secara fundamental dipengaruhi oleh limitasi intrinsik perangkat akuisisi citra, meliputi keterbatasan resolusi kamera CCTV, sudut perekaman yang tinggi (\textit{top-down angle}), serta kondisi pencahayaan luar ruang yang tidak terkontrol. Temuan ini konsisten dengan hasil studi \cite{wang2021helmet} yang melaporkan tantangan serupa pada sistem deteksi PPE berbasis CCTV. Identifikasi pola kesalahan ini menjadi landasan empiris bagi penerapan mekanisme konfirmasi temporal N-\textit{frame} pada tahap validasi pelanggaran (Subbab~\ref{subsec:threshold-temporal}), yang secara spesifik dirancang untuk menyaring kesalahan deteksi bersifat transien. Pendekatan \textit{multi-frame} confirmation telah terbukti efektif dalam mereduksi \textit{false positive} pada berbagai domain deteksi objek video \cite{han2020mining}, dan penerapannya pada konteks deteksi pelanggaran helm merupakan salah satu kontribusi teknis dalam penelitian ini.
+
+
+% ============================================================
+\section{Integrasi YOLOv8 dan ByteTrack dalam Pipeline \textit{Streaming Real-time}}
+\label{sec:integrasi-pipeline}
+% ============================================================
+
+Tahap kedua penelitian ini berfokus pada integrasi model deteksi YOLOv8 dengan algoritma pelacakan multi-objek ByteTrack dalam suatu pipeline pemrosesan video \textit{real-time} yang kohesif. Integrasi ini merupakan prasyarat fundamental untuk mentransformasi keluaran deteksi level-\textit{frame} menjadi aliran peristiwa (\textit{event stream}) pelanggaran helm yang memiliki identitas objek persisten serta konteks temporal dan spasial yang lengkap.
+
+% ------------------------------------------------------------
+\subsection{Arsitektur dan Desain Pipeline Deteksi}
+\label{subsec:arsitektur-pipeline}
+% ------------------------------------------------------------
+
+Pipeline deteksi diimplementasikan melalui modul \texttt{SentinelPipeline} yang mengorkestrasi empat komponen pemrosesan sekuensial pada setiap \textit{frame}: (1) inferensi YOLOv8 via \texttt{HelmetDetector}, (2) pelacakan multi-objek via \texttt{ObjectTracker} berbasis ByteTrack, (3) validasi pelanggaran temporal via \texttt{ViolationDetector}, dan (4) transmisi \textit{event} ke Kafka via \texttt{ViolationProducer}. Keseluruhan komponen berkomunikasi melalui objek \texttt{supervision.Detections} sebagai format intermediasi data dalam satu proses Python tunggal. Arsitektur pipeline diilustrasikan pada Gambar~\ref{fig:arsitektur-pipeline}.
+
+\begin{figure}[htbp]
+\centering
+% \includegraphics[width=0.95\textwidth]{gambar/arsitektur_pipeline.png}
+\fbox{\parbox{0.9\textwidth}{\centering\vspace{4cm}\textit{Placeholder: Diagram arsitektur pipeline deteksi --- Video Source $\rightarrow$ YOLOv8 $\rightarrow$ ByteTrack $\rightarrow$ ViolationDetector $\rightarrow$ Kafka Producer}\vspace{4cm}}}
+\caption{Arsitektur pipeline deteksi pelanggaran helm \textit{ITERA Smart Sentinel}.}
+\label{fig:arsitektur-pipeline}
+\end{figure}
+
+Keputusan desain \textit{single-process} dengan format intermediasi \texttt{supervision.Detections} meminimalkan overhead serialisasi dan deserialisasi antar-komponen, suatu pertimbangan kritis untuk mengoptimalkan \textit{throughput} pada perangkat dengan sumber daya terbatas \cite{jocher2023ultralytics}. Pendekatan orkestrasi sekuensial per-\textit{frame} dipilih karena sifat dependensi kausal antar-tahap: pelacakan memerlukan hasil deteksi, dan validasi pelanggaran memerlukan identitas \textit{track} yang telah ditetapkan. Pengelolaan konfigurasi secara terpusat melalui \textit{singleton} \texttt{Settings} berbasis Pydantic memastikan konsistensi parameter dan kemudahan \textit{deployment} pada lingkungan yang berbeda, mengikuti prinsip \textit{twelve-factor app} yang direkomendasikan untuk sistem berbasis \textit{microservice} \cite{wiggins2017twelve}.
+
+% ------------------------------------------------------------
+\subsection{Evaluasi Stabilitas Pelacakan Multi-Objek}
+\label{subsec:stabilitas-tracking}
+% ------------------------------------------------------------
+
+Evaluasi stabilitas pelacakan ByteTrack pada video uji 3.000 \textit{frame} menghasilkan 135 identitas unik (\textit{track ID}) yang distingtif, dengan rerata 3,05 objek aktif per \textit{frame} dan kapasitas maksimal 11 objek simultan, sebagaimana dirangkum pada Tabel~\ref{tab:statistik-tracking}. Konfigurasi pelacakan menggunakan \textit{track activation threshold} 0,25, \textit{minimum matching threshold} 0,8, dan \textit{lost track buffer} 60 \textit{frame}. Visualisasi hasil pelacakan dengan identitas persisten dan asosiasi spasial \textit{rider}--\textit{motorcycle} ditampilkan pada Gambar~\ref{fig:tracking-vis}.
+
+\begin{table}[htbp]
+\centering
+\caption{Statistik pelacakan multi-objek ByteTrack pada video uji (3.000 \textit{frame}).}
+\label{tab:statistik-tracking}
+\begin{tabular}{lr}
+\hline
+\textbf{Metrik} & \textbf{Nilai} \\
+\hline
+Total \textit{track ID} unik            & 135 \\
+Rata-rata objek aktif per \textit{frame} & 3,05 \\
+Maksimum objek simultan                  & 11 \\
+\textit{Lost track buffer}              & 60 \textit{frame} ($\approx$4 detik) \\
+\textit{Minimum matching threshold}      & 0,8 \\
+\textit{Track activation threshold}      & 0,25 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+% \includegraphics[width=0.95\textwidth]{gambar/tracking_visualization.png}
+\fbox{\parbox{0.9\textwidth}{\centering\vspace{4cm}\textit{Placeholder: Visualisasi pelacakan ByteTrack --- bounding box dengan track ID persisten, garis asosiasi spasial rider--motorcycle}\vspace{4cm}}}
+\caption{Visualisasi pelacakan multi-objek ByteTrack dengan identitas persisten dan asosiasi spasial \textit{rider}--\textit{motorcycle}.}
+\label{fig:tracking-vis}
+\end{figure}
+
+Keberhasilan ByteTrack dalam mempertahankan 135 identitas unik tanpa fragmentasi signifikan dapat diatribusikan pada mekanisme asosiasi dua tahap (\textit{two-stage association}) yang menjadi keunggulan fundamental algoritma ini \cite{zhang2022bytetrack}: deteksi berkonfidensialitas tinggi diasosiasikan terlebih dahulu melalui pencocokan berbasis IoU, kemudian deteksi berkonfidensialitas rendah dimanfaatkan untuk merecoveri \textit{track} yang hilang akibat oklusi sesaat. Kapabilitas penanganan hingga 11 objek simultan mendemonstrasikan skalabilitas yang memadai untuk kondisi kepadatan puncak pada gerbang kampus. Konfigurasi \textit{lost track buffer} sebesar 60 \textit{frame}---ekuivalen dengan $\approx$4 detik pada laju pemrosesan efektif---memungkinkan persistensi identitas pengendara selama oklusi temporal, suatu parameter yang dioptimasi berdasarkan rerata durasi lintasan kendaraan melewati \textit{field of view} kamera. Stabilitas pelacakan ini merupakan prasyarat esensial bagi mekanisme konfirmasi temporal N-\textit{frame} yang dibahas pada subbab berikutnya, karena akurasi identifikasi pelanggaran bergantung langsung pada konsistensi asosiasi identitas objek lintas-\textit{frame} \cite{dendorfer2021motchallenge}.
+
+% ------------------------------------------------------------
+\subsection{Mekanisme \textit{Threshold} Temporal untuk Konfirmasi Pelanggaran}
+\label{subsec:threshold-temporal}
+% ------------------------------------------------------------
+
+Eksperimen komparatif dengan tiga variasi \textit{threshold} temporal ($N = 1, 3, 5$) pada 3.000 \textit{frame} video uji menghasilkan gradasi yang jelas antara sensitivitas dan reliabilitas, sebagaimana dirangkum pada Tabel~\ref{tab:threshold-comparison}. Konfigurasi $N = 1$ mengonfirmasi 63 pelanggaran dengan \textit{confidence} rata-rata 0,721; konfigurasi $N = 3$ mengonfirmasi 60 pelanggaran dengan \textit{confidence} 0,751; dan konfigurasi $N = 5$ mengonfirmasi 57 pelanggaran dengan \textit{confidence} 0,778. Perbandingan visual antar-konfigurasi diilustrasikan pada Gambar~\ref{fig:threshold-comparison}.
+
+\begin{table}[htbp]
+\centering
+\caption{Perbandingan kinerja konfirmasi pelanggaran pada variasi \textit{threshold} temporal $N$.}
+\label{tab:threshold-comparison}
+\begin{tabular}{cccc}
+\hline
+\textbf{$N$ \textit{frame}} & \textbf{Jumlah Pelanggaran} & \textbf{\textit{Confidence} Rata-rata} & \textbf{Karakteristik} \\
+\hline
+1 & 63 & 0,721 & Tercepat, rentan \textit{noise} \\
+3 & 60 & 0,751 & Optimal \\
+5 & 57 & 0,778 & \textit{Confidence} tertinggi, \textit{delay} lebih besar \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+% \includegraphics[width=0.85\textwidth]{gambar/threshold_comparison_chart.png}
+\fbox{\parbox{0.85\textwidth}{\centering\vspace{4cm}\textit{Placeholder: Grafik perbandingan N-frame threshold --- bar chart jumlah pelanggaran dan confidence per variasi N}\vspace{4cm}}}
+\caption{Perbandingan jumlah pelanggaran terkonfirmasi dan \textit{confidence} rata-rata pada variasi \textit{threshold} temporal $N$.}
+\label{fig:threshold-comparison}
+\end{figure}
+
+Konfigurasi $N = 3$ terpilih sebagai nilai optimal berdasarkan analisis keseimbangan antara sensitivitas dan spesifisitas. Investigasi mendalam terhadap tiga deteksi tambahan pada $N = 1$ (\textit{track ID} 52, 68, dan 159) mengonfirmasi bahwa ketiganya merupakan \textit{false violation} yang dipicu oleh kesalahan klasifikasi sesaat pada satu \textit{frame}, mengindikasikan kerentanan pendekatan tanpa filter temporal terhadap \textit{noise} deteksi \cite{han2020mining}. Sebaliknya, konfigurasi $N = 5$ kehilangan 3 pelanggaran yang tervalidasi secara visual (\textit{track} 34, 82, dan 95) karena durasi lintasan objek tidak mencukupi ambang batas 5 \textit{frame}. Konfigurasi $N = 3$ meningkatkan \textit{confidence} rata-rata sebesar 4,2\% (dari 0,721 menjadi 0,751) dibandingkan $N = 1$ sambil mengeliminasi seluruh \textit{false positive}, dan mempertahankan 3 pelanggaran valid tambahan dibandingkan $N = 5$ dengan penambahan \textit{delay} konfirmasi yang marginal ($\approx$240 ms pada 8 FPS). Mekanisme ini, dilengkapi dengan \textit{patience-based decay} 2 \textit{frame} dan filter spasial IoA $\geq$ 0,2 terhadap \textit{bounding box} sepeda motor, secara empiris mengonfirmasi efektivitas pendekatan \textit{multi-frame temporal consistency} dalam menyaring \textit{noise} deteksi pada aplikasi surveilans \cite{pareek2021survey}.
+
+% ------------------------------------------------------------
+\subsection{Karakterisasi \textit{Throughput} Pipeline Deteksi}
+\label{subsec:throughput}
+% ------------------------------------------------------------
+
+Pengukuran \textit{throughput} selama pemrosesan 3.000 \textit{frame} pada prosesor Intel Core i5-5200U tanpa akselerasi GPU menghasilkan FPS rata-rata 8,29 (median 8,85), dengan rentang 1,14--9,77 FPS dan standar deviasi 1,44 FPS, sebagaimana dirinci pada Tabel~\ref{tab:throughput}. Total waktu pemrosesan tercatat 389,2 detik. Distribusi FPS sepanjang durasi pemrosesan divisualisasikan pada Gambar~\ref{fig:fps-over-time}.
+
+\begin{table}[htbp]
+\centering
+\caption{Statistik \textit{throughput} pipeline deteksi pada 3.000 \textit{frame}.}
+\label{tab:throughput}
+\begin{tabular}{lr}
+\hline
+\textbf{Metrik} & \textbf{Nilai} \\
+\hline
+FPS rata-rata          & 8,29 \\
+FPS median             & 8,85 \\
+FPS minimum            & 1,14 \\
+FPS maksimum           & 9,77 \\
+FPS persentil ke-5     & 5,25 \\
+FPS persentil ke-95    & 9,51 \\
+Standar deviasi FPS    & 1,44 \\
+Total waktu pemrosesan & 389,2 detik \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+% \includegraphics[width=0.95\textwidth]{gambar/fps_over_time.png}
+\fbox{\parbox{0.9\textwidth}{\centering\vspace{4cm}\textit{Placeholder: Grafik FPS terhadap waktu selama pemrosesan 3.000 frame --- time-series plot}\vspace{4cm}}}
+\caption{Distribusi FPS sepanjang pemrosesan 3.000 \textit{frame} video uji.}
+\label{fig:fps-over-time}
+\end{figure}
+
+Capaian \textit{throughput} 8,29 FPS pada CPU merupakan konsekuensi yang diharapkan mengingat dominasi \textit{latency} inferensi YOLOv8 pada perangkat tanpa akselerasi GPU \cite{jocher2023ultralytics}. Meskipun lebih rendah dari laju video asli (25 FPS), nilai ini tetap memenuhi kebutuhan fungsional deteksi pelanggaran lalu lintas kampus yang tidak mensyaratkan pemrosesan setiap \textit{frame}---cukup dengan pengambilan sampel pada interval yang memadai untuk menangkap setiap pengendara yang melintas. Stabilitas yang ditunjukkan oleh rentang persentil ke-5 hingga ke-95 (5,25--9,51 FPS) mengindikasikan bahwa 90\% durasi operasi berada dalam koridor kinerja yang konsisten dan dapat diprediksi. Anomali penurunan FPS minimum hingga 1,14 terobservasi hanya pada \textit{frame} awal akibat \textit{cold start} dan alokasi memori inisial. Merujuk pada karakteristik akselerasi GPU untuk arsitektur YOLO \cite{bochkovskiy2020yolov4}, adopsi perangkat grafis kompatibel CUDA diproyeksikan mampu meningkatkan \textit{throughput} sebesar 5--10$\times$ (40--80 FPS), membuka kemungkinan pemrosesan \textit{real-time} penuh.
+
+% ------------------------------------------------------------
+\subsection{Dekomposisi \textit{Latency} Pipeline \textit{End-to-End}}
+\label{subsec:latency}
+% ------------------------------------------------------------
+
+Dekomposisi \textit{latency} per komponen menunjukkan bahwa inferensi YOLOv8 mendominasi 98,8\% total waktu pemrosesan (126,64 ms dari 128,16 ms), dengan pelacakan ByteTrack mengonsumsi 1,49 ms (1,2\%) dan logika pelanggaran hanya 0,04 ms, sebagaimana dirangkum pada Tabel~\ref{tab:latency-komponen}. Median \textit{latency} \textit{end-to-end} tercatat 112,99 ms dengan P95 pada 190,40 ms dan P99 pada 363,67 ms. Proporsi kontribusi \textit{latency} per komponen dan distribusi \textit{latency} total divisualisasikan masing-masing pada Gambar~\ref{fig:latency-breakdown} dan Gambar~\ref{fig:latency-histogram}.
+
+\begin{table}[htbp]
+\centering
+\caption{\textit{Latency} per komponen pipeline deteksi (dalam milidetik).}
+\label{tab:latency-komponen}
+\begin{tabular}{lrrrr}
+\hline
+\textbf{Komponen} & \textbf{Rata-rata} & \textbf{Median} & \textbf{P95} & \textbf{P99} \\
+\hline
+Inferensi YOLOv8         & 126,64 & 111,57 & 187,93 & 361,70 \\
+Pelacakan ByteTrack      &   1,49 &   1,61 &   3,26 &   5,00 \\
+Logika pelanggaran       &   0,04 &   0,03 &   0,08 &    --- \\
+\hline
+\textbf{Total pipeline}  & 128,16 & 112,99 & 190,40 & 363,67 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+% \includegraphics[width=0.85\textwidth]{gambar/latency_breakdown_pie.png}
+\fbox{\parbox{0.85\textwidth}{\centering\vspace{3.5cm}\textit{Placeholder: Diagram pie proporsi latency per komponen pipeline}\vspace{3.5cm}}}
+\caption{Proporsi kontribusi \textit{latency} per komponen terhadap total \textit{latency} pipeline.}
+\label{fig:latency-breakdown}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+% \includegraphics[width=0.95\textwidth]{gambar/latency_distribution_histogram.png}
+\fbox{\parbox{0.9\textwidth}{\centering\vspace{4cm}\textit{Placeholder: Histogram distribusi total latency pipeline per frame}\vspace{4cm}}}
+\caption{Distribusi \textit{latency} total pipeline per \textit{frame} pada 3.000 \textit{frame} video uji.}
+\label{fig:latency-histogram}
+\end{figure}
+
+Dominasi inferensi YOLOv8 (98,8\%) sebagai \textit{bottleneck} komputasi konsisten dengan karakteristik arsitektur \textit{deep neural network} yang menuntut operasi matriks intensif pada tahap \textit{forward pass} \cite{jocher2023ultralytics}. Efisiensi komputasi ByteTrack yang hanya memerlukan 1,49 ms mendemonstrasikan keunggulan algoritma pencocokan berbasis IoU dan prediksi Kalman filter dengan kompleksitas $O(nm)$, di mana $n$ dan $m$ masing-masing merupakan jumlah \textit{track} aktif dan deteksi baru \cite{zhang2022bytetrack}. Logika validasi pelanggaran yang bersifat \textit{negligible} (0,04 ms) merupakan konsekuensi dari desain berbasis operasi \textit{lookup} pada struktur data \textit{dictionary} dengan kompleksitas $O(1)$. Median \textit{latency} 112,99 ms yang secara substansial berada di bawah ambang batas 1 detik memenuhi persyaratan \textit{near real-time}. Disparitas antara P95 dan P99 mengindikasikan \textit{latency spike} intermiten yang kemungkinan disebabkan oleh \textit{garbage collection} Python atau \textit{context switching} pada level sistem operasi, suatu fenomena yang lazim pada runtime interpreter \cite{belay2012dune}.
+
+% ------------------------------------------------------------
+\subsection{Profil Penggunaan Sumber Daya Komputasi}
+\label{subsec:resource-usage}
+% ------------------------------------------------------------
+
+Karakterisasi sumber daya selama eksekusi konkuren tiga komponen (pipeline deteksi, Apache Kafka, Apache Spark) pada 3.000 \textit{frame} menunjukkan total konsumsi CPU rata-rata 264,11\% dan memori 1.950,81 MB, sebagaimana dirinci pada Tabel~\ref{tab:resource-usage}. Pipeline deteksi mengonsumsi sumber daya tertinggi (CPU 243,61\%, memori 960 MB), diikuti Apache Spark (CPU 19,83\%, memori 757 MB) dan Apache Kafka (CPU 0,67\%, memori 234 MB).
+
+\begin{table}[htbp]
+\centering
+\caption{Penggunaan sumber daya komputasi per komponen sistem.}
+\label{tab:resource-usage}
+\begin{tabular}{lrrrr}
+\hline
+\textbf{Komponen} & \multicolumn{2}{c}{\textbf{CPU (\%)}} & \multicolumn{2}{c}{\textbf{Memori (MB)}} \\
+\cline{2-5}
+ & \textbf{Rata-rata} & \textbf{Puncak} & \textbf{Rata-rata} & \textbf{Puncak} \\
+\hline
+Pipeline deteksi  & 243,61 & 297,60 & 960,02 & 966,69 \\
+Apache Kafka      &   0,67 &   7,90 & 233,77 & 234,92 \\
+Apache Spark      &  19,83 & 155,80 & 757,02 & 835,00 \\
+\hline
+\textbf{Total sistem} & 264,11 & --- & 1.950,81 & --- \\
+\hline
+\end{tabular}
+\end{table}
+
+Utilisasi CPU pipeline deteksi yang melampaui 100\% merupakan konsekuensi dari paralelisme internal pada pustaka NumPy, OpenCV, dan Ultralytics yang mengeksploitasi \textit{multi-threading} secara transparan, memanfaatkan $\approx$2,4 \textit{core} dari prosesor \textit{dual-core} dengan \textit{hyper-threading}. \textit{Footprint} Kafka yang sangat ringan (0,67\% CPU, 234 MB memori) mengonfirmasi efisiensi arsitektural yang menjadi keunggulan kompetitif Kafka sebagai \textit{message broker} berskala tinggi \cite{kreps2011kafka}. Konsumsi memori Spark (757 MB) proporsional dengan kebutuhan manajemen \textit{state} untuk operasi deduplikasi berbasis \textit{watermark} pada \textit{structured streaming} \cite{armbrust2018structured}. Akumulasi kebutuhan memori $\approx$1,95 GB menunjukkan kelayakan \textit{deployment} pada perangkat dengan kapasitas RAM minimum 4 GB, membuka kemungkinan penerapan pada perangkat \textit{edge computing} berbiaya rendah di pos keamanan kampus tanpa memerlukan infrastruktur server berdaya tinggi.
+
+% ------------------------------------------------------------
+\subsection{Pembentukan \textit{Event Stream} Pelanggaran Terstruktur}
+\label{subsec:event-stream}
+% ------------------------------------------------------------
+
+Pipeline menghasilkan 60 \textit{event} pelanggaran terkonfirmasi pada konfigurasi $N = 3$, dengan \textit{confidence} rata-rata 0,751 dan rentang distribusi 0,563--0,895. Setiap \textit{event} direpresentasikan sebagai objek \texttt{ViolationEvent} dengan atribut komprehensif meliputi \texttt{event\_id} (UUID), \texttt{track\_id}, \texttt{timestamp} (UTC), \texttt{camera\_id}, \texttt{violation\_type}, \texttt{confidence}, \texttt{bbox}, \texttt{frame\_number}, dan \texttt{processing\_latency\_ms}. Sampel representatif dari \textit{event} pelanggaran yang dihasilkan disajikan pada Tabel~\ref{tab:sampel-event}.
+
+\begin{table}[htbp]
+\centering
+\caption{Sampel \textit{event} pelanggaran terkonfirmasi dari pipeline deteksi.}
+\label{tab:sampel-event}
+\small
+\begin{tabular}{ccccc}
+\hline
+\textbf{\textit{Track ID}} & \textbf{\textit{Frame}} & \textbf{\textit{Confidence}} & \textbf{\textit{Camera}} & \textbf{\textit{BBox} (x1,y1,x2,y2)} \\
+\hline
+4   &    3 & 0,895 & gate\_utama\_01 & (990, 312, 1058, 489) \\
+3   &    3 & 0,881 & gate\_utama\_01 & (775, 227, 822, 345) \\
+17  &   78 & 0,842 & gate\_utama\_01 & (701, 207, 748, 285) \\
+82  &  834 & 0,876 & gate\_utama\_01 & (994, 298, 1073, 537) \\
+163 & 2351 & 0,865 & gate\_utama\_01 & (575, 214, 621, 310) \\
+\hline
+\end{tabular}
+\end{table}
+
+Transformasi dari deteksi level-\textit{frame} menjadi \textit{event} berbasis identitas objek merupakan pergeseran paradigma yang kritis dalam arsitektur sistem deteksi pelanggaran \cite{pareek2021survey}. Pendekatan ini memungkinkan analisis historis berdasarkan entitas pengendara individual---bukan akumulasi deteksi per-\textit{frame} yang bersifat redundan---sehingga setiap pengendara tercatat tepat satu kali dalam \textit{event stream} melalui mekanisme deduplikasi per-\textit{track}. Serialisasi dalam format JSON dengan kompresi \textit{Snappy} dan kunci partisi berbasis \texttt{track\_id} menjamin efisiensi transmisi sekaligus \textit{message ordering} per-pengendara pada \textit{topic} Kafka. Struktur \textit{event} yang kaya atribut ini menjadi fondasi bagi tahap analitik hilir pada \textit{data mart}, memungkinkan kueri multidimensi berdasarkan waktu, lokasi, dan karakteristik deteksi secara simultan \cite{kimball2013data}.
+
+
+% ============================================================
+\section{Implementasi \textit{Data Mart} Analitik Pelanggaran Helm}
+\label{sec:data-mart}
+% ============================================================
+
+Komponen ketiga dari arsitektur \textit{ITERA Smart Sentinel} adalah \textit{data mart} pelanggaran helm yang berfungsi sebagai repositori analitik historis. Bagian ini memaparkan hasil perancangan dan implementasi \textit{backend streaming} yang mengintegrasikan \textit{event stream} dari pipeline deteksi ke dalam basis data relasional PostgreSQL dengan skema yang dioptimasi untuk kueri analitik, serta visualisasi \textit{dashboard} interaktif melalui Grafana.
+
+% ------------------------------------------------------------
+\subsection{Arsitektur \textit{Backend Streaming} dan Aliran Data}
+\label{subsec:arsitektur-backend}
+% ------------------------------------------------------------
+
+Arsitektur \textit{backend streaming} terdiri dari tiga komponen terintegrasi: Apache Kafka sebagai \textit{message broker}, Apache Spark Structured Streaming sebagai \textit{stream processor}, dan PostgreSQL sebagai basis data analitik. Spark mengonsumsi \textit{event} dari \textit{topic} Kafka \texttt{video.violations} dan mengeksekusi empat tahap transformasi secara sekuensial: \textit{parsing} JSON, deduplikasi berbasis pasangan kunci (\texttt{track\_id}, \texttt{camera\_id}) dalam \textit{watermark window} 30 detik, pengayaan dimensi waktu, dan penulisan atomik ke PostgreSQL via JDBC dengan interval \textit{micro-batch} 5 detik. Aliran data \textit{end-to-end} diilustrasikan pada Gambar~\ref{fig:arsitektur-backend}.
+
+\begin{figure}[htbp]
+\centering
+% \includegraphics[width=0.95\textwidth]{gambar/arsitektur_backend.png}
+\fbox{\parbox{0.9\textwidth}{\centering\vspace{4cm}\textit{Placeholder: Diagram arsitektur backend streaming --- Kafka $\rightarrow$ Spark Structured Streaming $\rightarrow$ PostgreSQL Star Schema $\rightarrow$ Grafana}\vspace{4cm}}}
+\caption{Arsitektur \textit{backend streaming} untuk integrasi \textit{event} pelanggaran ke \textit{data mart}.}
+\label{fig:arsitektur-backend}
+\end{figure}
+
+Pemilihan Spark Structured Streaming sebagai \textit{stream processor} dilandasi oleh keunggulannya dalam menyediakan semantik \textit{exactly-once processing} melalui mekanisme \textit{checkpointing} dan \textit{write-ahead log}, suatu jaminan yang kritis untuk memastikan integritas data pada \textit{data mart} analitik \cite{armbrust2018structured}. Arsitektur berbasis \textit{watermark window} 30 detik memungkinkan deduplikasi \textit{event} yang efektif tanpa memerlukan manajemen \textit{state} yang eksesif, sementara interval \textit{micro-batch} 5 detik merupakan titik keseimbangan antara \textit{latency} penyimpanan dan efisiensi pemrosesan. Decoupling antara pipeline deteksi dan \textit{stream processor} melalui Kafka sebagai intermediari mengikuti pola arsitektural \textit{event-driven} yang direkomendasikan untuk sistem \textit{real-time analytics} \cite{kreps2011kafka}, memungkinkan skalabilitas independen pada masing-masing komponen.
+
+% ------------------------------------------------------------
+\subsection{Perancangan \textit{Star Schema} untuk Analitik Multidimensi}
+\label{subsec:star-schema}
+% ------------------------------------------------------------
+
+\textit{Data mart} diimplementasikan menggunakan paradigma \textit{star schema} yang terdiri dari satu tabel fakta utama (\texttt{fact\_violations}) dan dua tabel dimensi (\texttt{dim\_camera}, \texttt{dim\_violation\_type}). Tabel fakta menyimpan setiap kejadian pelanggaran terkonfirmasi dengan atribut komprehensif meliputi \texttt{violation\_id}, \texttt{camera\_id}, \texttt{track\_id}, \texttt{confidence}, koordinat \textit{bounding box}, serta kolom dimensi waktu yang di-\textit{denormalisasi} (\texttt{hour}, \texttt{day\_of\_week}, \texttt{date}, \texttt{time\_period}). Enam \textit{analytical view} didefinisikan untuk mendukung panel \textit{dashboard}. Skema relasional diilustrasikan pada Gambar~\ref{fig:star-schema} dan strategi indeksasi dirangkum pada Tabel~\ref{tab:indeks-fakta}.
+
+\begin{figure}[htbp]
+\centering
+% \includegraphics[width=0.75\textwidth]{gambar/star_schema_erd.png}
+\fbox{\parbox{0.75\textwidth}{\centering\vspace{4cm}\textit{Placeholder: Entity Relationship Diagram star schema --- dim\_camera, dim\_violation\_type, fact\_violations}\vspace{4cm}}}
+\caption{\textit{Star schema} basis data \textit{data mart} pelanggaran helm.}
+\label{fig:star-schema}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\caption{Indeks pada tabel \texttt{fact\_violations} untuk optimasi kueri \textit{dashboard}.}
+\label{tab:indeks-fakta}
+\begin{tabular}{ll}
+\hline
+\textbf{Nama Indeks} & \textbf{Kolom} \\
+\hline
+\texttt{idx\_created\_at}        & \texttt{created\_at} \\
+\texttt{idx\_date}               & \texttt{date} \\
+\texttt{idx\_hour}               & \texttt{hour} \\
+\texttt{idx\_camera}             & \texttt{camera\_id} \\
+\texttt{idx\_time\_period}       & \texttt{time\_period} \\
+\texttt{idx\_date\_hour\_camera} & \texttt{(date, hour, camera\_id)} \\
+\hline
+\end{tabular}
+\end{table}
+
+Paradigma \textit{star schema} dipilih karena keunggulannya dalam mendukung kueri agregasi dan analisis multidimensi dengan kompleksitas \textit{join} yang minimal \cite{kimball2013data}. Strategi denormalisasi dimensi waktu langsung ke tabel fakta merupakan keputusan arsitektural yang mengoptimasi kinerja kueri \textit{dashboard} Grafana dengan mengeliminasi kebutuhan \textit{join} ke tabel dimensi waktu terpisah pada setiap \textit{refresh} panel---suatu \textit{trade-off} yang lazim pada desain \textit{data mart} berorientasi performa \cite{inmon2005building}. Indeks komposit \texttt{idx\_date\_hour\_camera} secara spesifik dirancang untuk mengakselerasi kueri \textit{heatmap} dan analisis tren temporal yang merupakan panel utama \textit{dashboard}. Setiap \textit{analytical view} didesain agar kueri dari Grafana cukup berupa \texttt{SELECT * FROM vw\_<nama>} tanpa logika agregasi tambahan, meminimalkan kompleksitas konfigurasi \textit{dashboard} dan memastikan konsistensi logika bisnis di level basis data.
+
+% ------------------------------------------------------------
+\subsection{Kinerja \textit{Message Broker} Apache Kafka}
+\label{subsec:kinerja-kafka}
+% ------------------------------------------------------------
+
+Pengujian kinerja Kafka melalui skenario \textit{burst} 500 pesan menghasilkan \textit{throughput} 3.275 pesan/detik dengan \textit{latency} median 0,014 ms per pesan, sebagaimana dirangkum pada Tabel~\ref{tab:kinerja-kafka}. Total waktu pengiriman tercatat 0,153 detik dengan waktu \textit{flush} 142,44 ms. Distribusi \textit{latency} menunjukkan P95 pada 0,044 ms dan P99 pada 0,080 ms, mengindikasikan konsistensi kinerja yang tinggi.
+
+\begin{table}[htbp]
+\centering
+\caption{Kinerja Apache Kafka \textit{producer} pada pengujian \textit{burst} 500 pesan.}
+\label{tab:kinerja-kafka}
+\begin{tabular}{lr}
+\hline
+\textbf{Metrik} & \textbf{Nilai} \\
+\hline
+Pesan terkirim                       & 500 \\
+Waktu pengiriman total               & 0,153 detik \\
+\textit{Throughput}                  & 3.275 pesan/detik \\
+\textit{Latency} rata-rata per pesan & 0,020 ms \\
+\textit{Latency} median             & 0,014 ms \\
+\textit{Latency} P95                & 0,044 ms \\
+\textit{Latency} P99                & 0,080 ms \\
+Waktu \textit{flush}                & 142,44 ms \\
+\hline
+\end{tabular}
+\end{table}
+
+Kapasitas \textit{throughput} 3.275 pesan/detik secara substansial melampaui kebutuhan operasional sistem satu kamera yang hanya menghasilkan $\approx$8 \textit{event}/detik, mengindikasikan skalabilitas infrastruktur Kafka hingga $\approx$400 kamera simultan tanpa modifikasi konfigurasi \cite{kreps2011kafka}. Optimasi \textit{producer} melalui kompresi \textit{Snappy}, \textit{batch.num.messages} = 100, dan \textit{linger.ms} = 5 ms memaksimalkan efisiensi \textit{micro-batching} tanpa mengorbankan \textit{latency} pengiriman. Parameter \texttt{acks=all} menjamin durabilitas pesan meskipun menambahkan overhead marginal pada waktu \textit{flush} (142,44 ms)---suatu konfigurasi yang merepresentasikan kompromi optimal antara \textit{throughput}, \textit{latency}, dan reliabilitas sebagaimana direkomendasikan untuk sistem \textit{event-driven} berskala produksi \cite{narkhede2017kafka}. \textit{Latency} per pesan yang sangat rendah (median 0,014 ms) mengonfirmasi bahwa overhead transmisi Kafka secara efektif \textit{negligible} terhadap \textit{latency} keseluruhan pipeline.
+
+% ------------------------------------------------------------
+\subsection{Kinerja Spark Structured Streaming}
+\label{subsec:kinerja-spark}
+% ------------------------------------------------------------
+
+Profil sumber daya Spark Structured Streaming selama pemrosesan menunjukkan konsumsi CPU rata-rata 19,83\% (puncak 155,80\%) dan memori 757 MB (puncak 835 MB), sebagaimana tercatat pada Tabel~\ref{tab:resource-usage}. Konfigurasi runtime dioptimasi melalui \texttt{spark.sql.shuffle.partitions=4} dan \texttt{spark.driver.memory=3g} yang disesuaikan dengan batasan RAM perangkat uji. Pengayaan dimensi waktu yang dilaksanakan mencakup \texttt{hour}, \texttt{minute}, \texttt{day\_of\_week}, \texttt{date}, \texttt{week\_of\_year}, \texttt{month}, \texttt{year}, serta \texttt{time\_period} dengan pemetaan periode waktu Indonesia (pagi: 05--10, siang: 11--14, sore: 15--17, malam: lainnya).
+
+\textit{Latency end-to-end} dari deteksi hingga persistensi ke PostgreSQL diestimasi 5--10 detik, yang merupakan akumulasi dari \textit{latency} pipeline deteksi ($\approx$128 ms), transmisi Kafka ($<$1 ms), dan interval \textit{micro-batch} Spark (5 detik). Pemetaan periode waktu Indonesia dirancang spesifik untuk mengakomodasi pola kegiatan kampus, memungkinkan analisis yang relevan dengan jadwal perkuliahan dan aktivitas institusional \cite{armbrust2018structured}. \textit{Latency end-to-end} 5--10 detik masih berada dalam batas yang dapat diterima mengingat \textit{data mart} ditujukan untuk analitik keselamatan retrospektif, bukan sistem kontrol kendaraan yang mensyaratkan responsivitas sub-detik. Konfigurasi \texttt{shuffle.partitions=4} yang lebih rendah dari nilai \textit{default} (200) dipilih untuk meminimalkan overhead koordinasi \textit{task} pada \textit{single-node deployment}, mengikuti rekomendasi optimasi Spark untuk skenario \textit{low-latency streaming} pada perangkat dengan sumber daya terbatas \cite{chambers2018spark}.
+
+% ------------------------------------------------------------
+\subsection{Visualisasi \textit{Dashboard} Analitik Keselamatan Kampus}
+\label{subsec:dashboard}
+% ------------------------------------------------------------
+
+Implementasi \textit{dashboard} Grafana menghasilkan enam panel analitik yang masing-masing dipetakan langsung ke satu \textit{analytical view} pada PostgreSQL, menyajikan visualisasi komprehensif dari KPI \textit{overview}, tren harian, distribusi kamera, \textit{activity heatmap} (jam $\times$ hari), distribusi periode waktu (pagi/siang/sore/malam), dan log 100 pelanggaran terbaru. Tampilan keseluruhan \textit{dashboard} disajikan pada Gambar~\ref{fig:dashboard-overview} dan detail panel \textit{heatmap} divisualisasikan pada Gambar~\ref{fig:dashboard-heatmap}.
+
+\begin{figure}[htbp]
+\centering
+% \includegraphics[width=0.95\textwidth]{gambar/grafana_dashboard_full.png}
+\fbox{\parbox{0.9\textwidth}{\centering\vspace{5cm}\textit{Placeholder: Screenshot dashboard Grafana lengkap --- KPI, tren temporal, heatmap, distribusi kamera, distribusi periode waktu, log pelanggaran}\vspace{5cm}}}
+\caption{Tampilan keseluruhan \textit{dashboard} keselamatan \textit{ITERA Smart Sentinel} pada Grafana.}
+\label{fig:dashboard-overview}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+% \includegraphics[width=0.85\textwidth]{gambar/grafana_heatmap.png}
+\fbox{\parbox{0.85\textwidth}{\centering\vspace{4cm}\textit{Placeholder: Detail panel heatmap jam $\times$ hari menunjukkan hotspot temporal pelanggaran}\vspace{4cm}}}
+\caption{Panel \textit{heatmap} aktivitas pelanggaran berdasarkan jam dan hari pada \textit{dashboard} Grafana.}
+\label{fig:dashboard-heatmap}
+\end{figure}
+
+Desain pemetaan satu-ke-satu antara panel \textit{dashboard} dan \textit{analytical view} mengikuti prinsip \textit{separation of concerns} yang direkomendasikan untuk arsitektur \textit{data visualization} \cite{few2006information}: logika agregasi dienkapsulasi di level basis data melalui \textit{view}, sementara Grafana berfokus pada presentasi visual. Keenam panel dirancang secara purposif untuk menjawab pertanyaan analitik yang relevan dengan manajemen keselamatan lalu lintas kampus: identifikasi \textit{hotspot} temporal dan spasial pelanggaran, pemantauan tren historis, dan investigasi insiden spesifik. Integrasi panel-panel tersebut mentransformasi data pelanggaran mentah menjadi informasi yang \textit{actionable} bagi pengelola kampus, mendukung pengambilan keputusan berbasis data pada dimensi penempatan personel keamanan, perencanaan jadwal patroli, dan evaluasi efektivitas kebijakan keselamatan berkendara \cite{eckerson2010performance}.
+
+% ------------------------------------------------------------
+\subsection{Analisis Multidimensi Pola Pelanggaran}
+\label{subsec:analisis-pola}
+% ------------------------------------------------------------
+
+Analisis distribusi \textit{confidence} dari 60 pelanggaran terkonfirmasi menghasilkan rentang 0,563--0,895 dengan rerata 0,751, di mana 71,7\% pelanggaran terdeteksi dengan \textit{confidence} di atas 0,70 dan hanya 5,0\% berada pada rentang rendah (0,50--0,60), sebagaimana dirinci pada Tabel~\ref{tab:distribusi-confidence}. Struktur \textit{star schema} memungkinkan empat dimensi analisis: distribusi temporal melalui \texttt{vw\_peak\_hours}, distribusi spasial melalui \texttt{vw\_camera\_stats}, tren historis melalui \texttt{vw\_daily\_trend}, dan karakteristik deteksi melalui distribusi \textit{confidence}.
+
+\begin{table}[htbp]
+\centering
+\caption{Distribusi pelanggaran terkonfirmasi berdasarkan rentang \textit{confidence}.}
+\label{tab:distribusi-confidence}
+\begin{tabular}{lrc}
+\hline
+\textbf{Rentang \textit{Confidence}} & \textbf{Jumlah} & \textbf{Persentase} \\
+\hline
+0,50 -- 0,60 & 3  & 5,0\% \\
+0,60 -- 0,70 & 14 & 23,3\% \\
+0,70 -- 0,80 & 22 & 36,7\% \\
+0,80 -- 0,90 & 21 & 35,0\% \\
+\hline
+\textbf{Total} & 60 & 100,0\% \\
+\hline
+\end{tabular}
+\end{table}
+
+Proporsi dominan pelanggaran dengan \textit{confidence} tinggi ($>$0,70: 71,7\%) mengonfirmasi reliabilitas keseluruhan pipeline deteksi dan validasi pelanggaran. Pelanggaran pada rentang \textit{confidence} rendah (0,50--0,60: 5,0\%) umumnya terjadi pada kondisi visual yang menantang---jarak objek jauh dari kamera atau oklusi parsial---konsisten dengan analisis kesalahan pada Subbab~\ref{subsec:analisis-kesalahan}. Temuan ini mengindikasikan bahwa mekanisme konfirmasi temporal N-\textit{frame} berhasil menyaring sebagian besar deteksi berkepercayaan rendah, sehingga data yang tersimpan dalam \textit{data mart} memiliki tingkat reliabilitas yang tinggi untuk mendukung pengambilan keputusan keselamatan \cite{pareek2021survey}. Kemampuan analisis multidimensi melalui empat \textit{analytical view}---temporal, spasial, historis, dan karakteristik deteksi---merepresentasikan nilai tambah signifikan dari pendekatan \textit{star schema}, memungkinkan pengelola kampus melakukan \textit{drill-down analysis} yang tidak dimungkinkan oleh sistem pemantauan konvensional berbasis pengawasan visual langsung \cite{kimball2013data}.
+
+
+% ============================================================
+\section{Sintesis Hasil dan Validasi terhadap Tujuan Penelitian}
+\label{sec:ringkasan}
+% ============================================================
+
+Tabel~\ref{tab:ringkasan-hasil} merangkum seluruh hasil evaluasi sistem \textit{ITERA Smart Sentinel} dalam kerangka validasi terhadap tujuan dan metrik penelitian yang telah ditetapkan. Seluruh metrik kinerja berhasil dicapai dan melampaui target minimal yang dipersyaratkan.
+
+\begin{table}[htbp]
+\centering
+\caption{Ringkasan hasil pengujian sistem terhadap tujuan dan metrik penelitian.}
+\label{tab:ringkasan-hasil}
+\small
+\begin{tabular}{p{4cm}p{3.5cm}p{3.5cm}c}
+\hline
+\textbf{Aspek} & \textbf{Target} & \textbf{Hasil} & \textbf{Status} \\
+\hline
+mAP@50 model deteksi & $\geq$ 80\% & 90,0\% & \checkmark \\
+AP kelas target (\texttt{NO\_HELMET}) & $\geq$ 80\% & 90,0\% & \checkmark \\
+Konsistensi pelacakan & Identitas persisten & 135 \textit{track} unik & \checkmark \\
+\textit{Threshold} temporal & Reduksi \textit{false positive} & $N=3$ optimal, +4,2\% \textit{confidence} & \checkmark \\
+\textit{Latency} pipeline & $<$ 1 detik & 128,16 ms & \checkmark \\
+\textit{Throughput} Kafka & $>$ 100 pesan/detik & 3.275 pesan/detik & \checkmark \\
+Memori total sistem & $<$ 4 GB & 1,95 GB & \checkmark \\
+\textit{Data mart} analitik & \textit{Star schema} operasional & 6 \textit{view} + \textit{dashboard} & \checkmark \\
+\hline
+\end{tabular}
+\end{table}
+
+Pemenuhan seluruh metrik secara konsisten mendemonstrasikan bahwa arsitektur terintegrasi YOLOv8--ByteTrack--Kafka--Spark yang dikembangkan dalam penelitian ini mampu: (1) mendeteksi pelanggaran helm dengan akurasi tinggi (mAP@50 = 90,0\%) yang melampaui target dan kompetitif terhadap studi sejenis \cite{wang2021helmet}, (2) mempertahankan identitas objek secara persisten melalui pelacakan ByteTrack (135 \textit{track} unik) dengan validasi temporal yang meningkatkan \textit{confidence} 4,2\% \cite{zhang2022bytetrack}, (3) memproses video secara \textit{near real-time} (128,16 ms \textit{latency}) pada perangkat komputasi terbatas (1,95 GB memori total), serta (4) menyediakan \textit{data mart} analitik historis komprehensif melalui \textit{star schema} PostgreSQL dan \textit{dashboard} Grafana interaktif \cite{kimball2013data}. Capaian-capaian tersebut mengonfirmasi kelayakan dan efektivitas pendekatan integrasi \textit{deep learning}, \textit{multi-object tracking}, dan \textit{stream processing} sebagai solusi deteksi pelanggaran helm yang aplikatif untuk lingkungan kampus.

@@ -51,7 +51,8 @@ class SentinelPipeline:
         logger.info("=" * 60)
 
         self.detector = HelmetDetector()
-        self.tracker = ObjectTracker(frame_rate=15)
+        # Tracker is initialized after opening video to use actual FPS
+        self.tracker: ObjectTracker | None = None
         self.violation_checker = ViolationDetector()
 
         if self.enable_kafka:
@@ -88,81 +89,241 @@ class SentinelPipeline:
 
         return cap
 
+    # ── Colour palette (BGR) ──────────────────────────────────────────
+    # Chosen for high contrast on outdoor traffic footage and
+    # distinguishable even with common colour-vision deficiencies.
+    CLR_SAFE       = (80, 200, 80)    # muted green  – helmet OK
+    CLR_MOTORCYCLE = (200, 180, 60)   # teal/cyan    – motorcycle
+    CLR_NO_ASSOC   = (100, 160, 200)  # warm grey    – rider, no motor
+    CLR_SUSPECT    = (0, 165, 255)    # orange       – building streak
+    CLR_VIOLATION  = (60, 60, 230)    # strong red   – confirmed violation
+    CLR_HUD_BG     = (30, 30, 30)     # dark grey    – HUD background
+    CLR_WHITE      = (255, 255, 255)
+
     def _annotate_frame(
         self, frame: np.ndarray, detections: sv.Detections
     ) -> np.ndarray:
         """Draw bounding boxes and labels on frame for visualization."""
+        annotated = frame.copy()
+
         if len(detections) == 0:
-            return frame
+            self._draw_hud(annotated)
+            return annotated
 
-        # Build labels
-        labels = []
-        for i in range(len(detections)):
-            class_name = detections.data.get("class_name", [None])[i]
-            tracker_id = detections.tracker_id[i] if detections.tracker_id is not None else None
-            confidence = detections.confidence[i]
-
-            label = f"#{tracker_id} " if tracker_id is not None else ""
-            label += f"{class_name} {confidence:.2f}"
-            labels.append(label)
-
-        annotated = self.box_annotator.annotate(
-            scene=frame.copy(), detections=detections
-        )
-        annotated = self.label_annotator.annotate(
-            scene=annotated, detections=detections, labels=labels
-        )
-
-        # Draw One-to-Many Association Lines (Rider to Motorbike via IoA)
-        # Import compute_ioa here to avoid circular imports if any, or assume it's available
         from src.detector.violation import compute_ioa
-        
-        # Class IDs (match model: {0: DRIVER_HELMET, 1: DRIVER_NO_HELMET, 2: MOTORCYCLE})
-        # Note: In violation.py NO_HELMET is 0 and HELMET is 1 due to swapping.
-        # We will use the same indices used in violation.py logic.
+
+        # Violation detector state
+        violated_ids = self.violation_checker._violated_ids
+        streak_map = self.violation_checker._no_helmet_streak
+        confirm_needed = self.violation_checker.confirm_frames
+
         class_ids = detections.class_id
+        tracker_ids = detections.tracker_id
         xyxy = detections.xyxy
-        
-        # Masks for riders (Helmet/NoHelmet) and Motorbikes
+        confidences = detections.confidence
+        class_names = detections.data.get("class_name", [None] * len(detections))
+
+        # Pre-compute rider ↔ motorcycle IoA map
         rider_mask = (class_ids == 0) | (class_ids == 1)
         motorbike_mask = (class_ids == 2)
-        
         rider_indices = np.where(rider_mask)[0]
         motorbike_indices = np.where(motorbike_mask)[0]
+        ioa_threshold = settings.association_iou_threshold
 
-        iou_threshold = settings.association_iou_threshold  # typically 0.3
-        
-        # For each motorbike, find all riders associated with it (One-to-Many)
+        riding_indices: set[int] = set()
+        for r_idx in rider_indices:
+            for m_idx in motorbike_indices:
+                if compute_ioa(xyxy[r_idx], xyxy[m_idx]) >= ioa_threshold:
+                    riding_indices.add(int(r_idx))
+                    break
+
+        # ── Draw each detection ──────────────────────────────────────
+        for i in range(len(detections)):
+            x1, y1, x2, y2 = xyxy[i].astype(int)
+            track_id = (
+                int(tracker_ids[i])
+                if tracker_ids is not None and tracker_ids[i] is not None
+                else None
+            )
+            class_id = class_ids[i]
+            conf = confidences[i]
+            cls_name = class_names[i] if class_names[i] is not None else ""
+            is_rider = class_id in (0, 1)
+            has_motor = i in riding_indices
+
+            # ── Resolve colour, badge text, badge icon ───────────────
+            if class_id == 2:
+                color = self.CLR_MOTORCYCLE
+                badge = ""
+            elif track_id is not None and track_id in violated_ids:
+                color = self.CLR_VIOLATION
+                badge = "!! VIOLATION"
+            elif (
+                track_id is not None
+                and streak_map.get(track_id, 0) > 0
+                and has_motor
+            ):
+                streak = streak_map[track_id]
+                color = self.CLR_SUSPECT
+                badge = f"SUSPECT {streak}/{confirm_needed}"
+            elif is_rider and not has_motor:
+                color = self.CLR_NO_ASSOC
+                badge = "NO MOTOR"
+            else:
+                color = self.CLR_SAFE
+                badge = ""
+
+            # ── Box ──────────────────────────────────────────────────
+            thick = 3 if badge.startswith("!!") else 2
+            cv2.rectangle(annotated, (x1, y1), (x2, y2), color, thick)
+
+            # Corner accents for VIOLATION (makes it instantly visible)
+            if badge.startswith("!!"):
+                accent_len = min(20, (x2 - x1) // 3, (y2 - y1) // 3)
+                for cx, cy, dx, dy in [
+                    (x1, y1, 1, 1), (x2, y1, -1, 1),
+                    (x1, y2, 1, -1), (x2, y2, -1, -1),
+                ]:
+                    cv2.line(annotated, (cx, cy), (cx + dx * accent_len, cy), color, 4)
+                    cv2.line(annotated, (cx, cy), (cx, cy + dy * accent_len), color, 4)
+
+            # ── Label pill (track + class + conf) ────────────────────
+            id_str = f"#{track_id} " if track_id is not None else ""
+            label = f"{id_str}{cls_name} {conf:.0%}"
+            self._draw_pill(annotated, label, x1, y1 - 4, color, above=True)
+
+            # ── Badge pill (status) ──────────────────────────────────
+            if badge:
+                # Use white text on coloured pill for status
+                self._draw_pill(
+                    annotated, badge, x1, y1 - 26, color, above=True,
+                    font_scale=0.50, bold=True,
+                )
+
+        # ── Association lines (dashed style) ─────────────────────────
         for m_idx in motorbike_indices:
             m_box = xyxy[m_idx]
-            m_center = (int((m_box[0] + m_box[2]) / 2), int((m_box[1] + m_box[3]) / 2))
-            
+            mc = (int((m_box[0] + m_box[2]) / 2), int((m_box[1] + m_box[3]) / 2))
             for r_idx in rider_indices:
+                if int(r_idx) not in riding_indices:
+                    continue
                 r_box = xyxy[r_idx]
-                r_center = (int((r_box[0] + r_box[2]) / 2), int((r_box[1] + r_box[3]) / 2))
-                
-                ioa = compute_ioa(r_box, m_box)
-                if ioa >= iou_threshold:
-                    # Draw a line connecting rider to motorbike
-                    # Green line for successful spatial association
-                    cv2.line(annotated, r_center, m_center, (0, 255, 0), 2)
-                    cv2.circle(annotated, r_center, 4, (255, 0, 0), -1) # Blue dot for rider
-                    cv2.circle(annotated, m_center, 4, (0, 0, 255), -1) # Red dot for motor
+                rc = (int((r_box[0] + r_box[2]) / 2), int((r_box[1] + r_box[3]) / 2))
+                if compute_ioa(r_box, m_box) >= ioa_threshold:
+                    self._draw_dashed_line(annotated, rc, mc, self.CLR_SAFE, 2, 8)
+                    cv2.circle(annotated, rc, 4, self.CLR_SAFE, -1)
+                    cv2.circle(annotated, mc, 4, self.CLR_MOTORCYCLE, -1)
 
-        # Add FPS and violation count overlay
-        fps_text = f"FPS: {self._fps_history[-1]:.1f}" if self._fps_history else "FPS: --"
-        cv2.putText(
-            annotated, fps_text, (10, 30),
-            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2,
-        )
-        cv2.putText(
-            annotated,
-            f"Violations: {self._total_violations}",
-            (10, 70),
-            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2,
-        )
-
+        self._draw_hud(annotated)
         return annotated
+
+    # ── Drawing helpers ──────────────────────────────────────────────
+
+    @staticmethod
+    def _draw_pill(
+        img: np.ndarray,
+        text: str,
+        x: int,
+        y: int,
+        color: tuple,
+        above: bool = True,
+        font_scale: float = 0.45,
+        bold: bool = False,
+    ) -> None:
+        """Draw a rounded-rectangle 'pill' label with white text."""
+        thick = 2 if bold else 1
+        (tw, th), baseline = cv2.getTextSize(
+            text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thick
+        )
+        pad_x, pad_y = 6, 4
+        if above:
+            box_y1 = y - th - 2 * pad_y
+            box_y2 = y
+        else:
+            box_y1 = y
+            box_y2 = y + th + 2 * pad_y
+
+        # Clamp to frame
+        box_y1 = max(box_y1, 0)
+        box_x2 = x + tw + 2 * pad_x
+
+        # Semi-transparent filled rectangle
+        overlay = img.copy()
+        cv2.rectangle(overlay, (x, box_y1), (box_x2, box_y2), color, -1)
+        cv2.addWeighted(overlay, 0.75, img, 0.25, 0, img)
+
+        # White text
+        text_y = box_y2 - pad_y
+        cv2.putText(
+            img, text, (x + pad_x, text_y),
+            cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), thick,
+            cv2.LINE_AA,
+        )
+
+    @staticmethod
+    def _draw_dashed_line(
+        img: np.ndarray,
+        pt1: tuple, pt2: tuple,
+        color: tuple, thickness: int = 1, gap: int = 8,
+    ) -> None:
+        """Draw a dashed line between two points."""
+        dist = np.hypot(pt2[0] - pt1[0], pt2[1] - pt1[1])
+        if dist == 0:
+            return
+        dx = (pt2[0] - pt1[0]) / dist
+        dy = (pt2[1] - pt1[1]) / dist
+        steps = int(dist / gap)
+        for j in range(0, steps, 2):
+            s = (int(pt1[0] + dx * j * gap), int(pt1[1] + dy * j * gap))
+            e = (
+                int(pt1[0] + dx * min((j + 1) * gap, dist)),
+                int(pt1[1] + dy * min((j + 1) * gap, dist)),
+            )
+            cv2.line(img, s, e, color, thickness, cv2.LINE_AA)
+
+    def _draw_hud(self, frame: np.ndarray) -> None:
+        """Draw heads-up display with stats panel and colour legend."""
+        h, w = frame.shape[:2]
+
+        # ── Top-left stats panel (semi-transparent) ──────────────────
+        panel_h, panel_w = 80, 280
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (0, 0), (panel_w, panel_h), self.CLR_HUD_BG, -1)
+        cv2.addWeighted(overlay, 0.65, frame, 0.35, 0, frame)
+
+        fps_val = f"{self._fps_history[-1]:.1f}" if self._fps_history else "--"
+        cv2.putText(
+            frame, f"FPS  {fps_val}", (12, 30),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.CLR_SAFE, 2, cv2.LINE_AA,
+        )
+        cv2.putText(
+            frame, f"VIOLATIONS  {self._total_violations}", (12, 62),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.CLR_VIOLATION, 2, cv2.LINE_AA,
+        )
+
+        # ── Bottom-left legend (semi-transparent) ────────────────────
+        legend_items = [
+            ("\u25CF Helmet OK",            self.CLR_SAFE),
+            ("\u25CF Motorcycle",           self.CLR_MOTORCYCLE),
+            ("\u25CF No Motor (ignored)",   self.CLR_NO_ASSOC),
+            ("\u25CF Suspect (streak)",     self.CLR_SUSPECT),
+            ("\u25CF VIOLATION",            self.CLR_VIOLATION),
+        ]
+        line_h = 22
+        legend_h = len(legend_items) * line_h + 12
+        legend_w = 260
+        ly = h - legend_h
+
+        overlay2 = frame.copy()
+        cv2.rectangle(overlay2, (0, ly), (legend_w, h), self.CLR_HUD_BG, -1)
+        cv2.addWeighted(overlay2, 0.60, frame, 0.40, 0, frame)
+
+        for idx, (text, color) in enumerate(legend_items):
+            ty = ly + 18 + idx * line_h
+            cv2.putText(
+                frame, text, (10, ty),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1, cv2.LINE_AA,
+            )
 
     def run(self):
         """
@@ -181,6 +342,10 @@ class SentinelPipeline:
             h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             writer = cv2.VideoWriter(self.save_output, fourcc, fps, (w, h))
             logger.info(f"Saving output to: {self.save_output}")
+
+        # Initialize tracker with actual video FPS for correct max_time_lost
+        video_fps = int(cap.get(cv2.CAP_PROP_FPS)) or 30
+        self.tracker = ObjectTracker(frame_rate=video_fps)
 
         self._start_time = time.time()
         logger.info("🚀 Pipeline running...")

@@ -1,0 +1,58 @@
+% ============================================================
+% BAB V — KESIMPULAN DAN SARAN
+% ITERA Smart Sentinel: Sistem Deteksi & Analitik Pelanggaran Helm Real-time
+% ============================================================
+
+\chapter{KESIMPULAN DAN SARAN}
+\label{chap:kesimpulan}
+
+% ============================================================
+\section{Kesimpulan}
+\label{sec:kesimpulan}
+% ============================================================
+
+Berdasarkan hasil pengembangan, pengujian, dan analisis yang telah dipaparkan pada Bab~\ref{chap:hasil}, penelitian ini menghasilkan sejumlah kesimpulan yang dirumuskan sesuai dengan tiga tujuan penelitian yang telah ditetapkan.
+
+\begin{enumerate}
+
+\item \textbf{Pengembangan model deteksi helm berbasis YOLOv8.}
+Model deteksi helm yang dikembangkan menggunakan arsitektur YOLOv8 dengan pendekatan \textit{transfer learning} dari bobot COCO berhasil mencapai mAP@50 sebesar 90,0\% dengan \textit{precision} 87,5\% dan \textit{recall} 86,5\% pada tiga kelas objek (\texttt{DRIVER\_HELMET}, \texttt{DRIVER\_NO\_HELMET}, \texttt{MOTORCYCLE}). Capaian ini melampaui target minimal penelitian (mAP $\geq$ 80\%) dan mendemonstrasikan efektivitas strategi augmentasi data serta konfigurasi pelatihan yang diterapkan. Kelas target utama \texttt{DRIVER\_NO\_HELMET} memperoleh \textit{Average Precision} 90,0\%, mengonfirmasi sensitivitas model yang memadai untuk identifikasi pelanggaran helm pada citra CCTV lingkungan kampus.
+
+\item \textbf{Integrasi YOLOv8 dan ByteTrack dalam pipeline pemrosesan \textit{real-time}.}
+Integrasi model deteksi YOLOv8 dengan algoritma pelacakan multi-objek ByteTrack dalam arsitektur pipeline \texttt{SentinelPipeline} berhasil mentransformasi keluaran deteksi level-\textit{frame} menjadi aliran peristiwa (\textit{event stream}) pelanggaran helm yang memiliki identitas objek persisten. ByteTrack mempertahankan 135 identitas unik (\textit{track ID}) secara stabil dengan kapasitas hingga 11 objek simultan. Mekanisme konfirmasi temporal $N = 3$ \textit{frame} yang diimplementasikan pada \texttt{ViolationDetector} terbukti optimal dalam menyeimbangkan sensitivitas dan spesifisitas, meningkatkan \textit{confidence} rata-rata sebesar 4,2\% (dari 0,721 menjadi 0,751) sambil mengeliminasi seluruh \textit{false positive} yang teridentifikasi pada konfigurasi tanpa filter temporal. Pipeline secara keseluruhan mencapai \textit{latency end-to-end} 128,16 ms (median 112,99 ms) dengan \textit{throughput} 8,29 FPS pada prosesor Intel Core i5-5200U tanpa akselerasi GPU, memenuhi persyaratan pemrosesan \textit{near real-time} dengan konsumsi memori total sistem sebesar 1,95 GB.
+
+\item \textbf{Implementasi \textit{data mart} analitik pelanggaran helm.}
+\textit{Data mart} analitik yang diimplementasikan menggunakan paradigma \textit{star schema} pada PostgreSQL---terdiri dari tabel fakta \texttt{fact\_violations} dan dua tabel dimensi---berhasil mengintegrasikan \textit{event stream} pelanggaran dari pipeline deteksi melalui arsitektur \textit{backend streaming} berbasis Apache Kafka dan Spark Structured Streaming. Apache Kafka mendemonstrasikan kapasitas \textit{throughput} 3.275 pesan/detik dengan \textit{latency} median 0,014 ms, mengindikasikan skalabilitas hingga $\approx$400 kamera simultan. Enam \textit{analytical view} yang didefinisikan pada basis data dipetakan langsung ke panel \textit{dashboard} Grafana interaktif, menyediakan visualisasi komprehensif meliputi KPI \textit{overview}, tren harian, distribusi kamera, \textit{activity heatmap}, distribusi periode waktu, dan log pelanggaran terbaru. Implementasi ini mentransformasi data pelanggaran mentah menjadi informasi yang \textit{actionable} untuk mendukung pengambilan keputusan keselamatan berbasis data di lingkungan kampus.
+
+\end{enumerate}
+
+Secara keseluruhan, penelitian ini berhasil mengembangkan dan memvalidasi arsitektur terintegrasi \textit{ITERA Smart Sentinel} yang menggabungkan \textit{deep learning} (YOLOv8), \textit{multi-object tracking} (ByteTrack), dan \textit{stream processing} (Kafka--Spark) sebagai solusi deteksi dan analitik pelanggaran helm \textit{real-time} yang aplikatif, efisien, dan dapat di-\textit{deploy} pada perangkat komputasi terbatas di lingkungan kampus Institut Teknologi Sumatera.
+
+% ============================================================
+\section{Saran}
+\label{sec:saran}
+% ============================================================
+
+Berdasarkan hasil penelitian dan keterbatasan yang teridentifikasi selama proses pengembangan dan evaluasi, berikut dirumuskan sejumlah saran untuk pengembangan lebih lanjut.
+
+\begin{enumerate}
+
+\item \textbf{Peningkatan kapasitas dan keberagaman dataset.}
+Dataset pelatihan pada penelitian ini terbatas pada 400 citra dasar dari satu lokasi kamera. Penelitian selanjutnya disarankan untuk memperluas dataset dengan memasukkan citra dari beragam titik pengawasan kampus, variasi kondisi cuaca (hujan, berkabut), serta rentang waktu yang lebih luas (pagi, siang, sore, malam) guna meningkatkan kemampuan generalisasi model pada skenario operasional yang lebih heterogen.
+
+\item \textbf{Akselerasi inferensi melalui perangkat GPU atau \textit{edge computing}.}
+\textit{Throughput} pipeline yang tercatat pada 8,29 FPS merupakan konsekuensi dari keterbatasan komputasi CPU. Implementasi pada perangkat dengan akselerasi GPU---seperti NVIDIA Jetson Nano atau Jetson Orin---diproyeksikan mampu meningkatkan \textit{throughput} secara signifikan hingga 40--80 FPS, memungkinkan pemrosesan \textit{real-time} penuh pada laju video asli (25--30 FPS) serta mendukung pemrosesan multi-kamera secara simultan.
+
+\item \textbf{Ekspansi cakupan multi-kamera dan multi-lokasi.}
+Sistem saat ini divalidasi pada satu sumber video. Pengembangan selanjutnya perlu mengevaluasi skalabilitas arsitektur pada skenario multi-kamera dengan menambahkan mekanisme \textit{load balancing} antar-pipeline deteksi, partisi \textit{topic} Kafka berbasis \texttt{camera\_id}, serta optimasi manajemen \textit{state} Spark untuk deduplikasi lintas-kamera.
+
+\item \textbf{Implementasi mekanisme notifikasi dan respons \textit{real-time}.}
+Integrasi modul notifikasi otomatis---melalui \textit{webhook}, SMS, atau aplikasi \textit{messaging}---yang dipicu oleh \textit{event} pelanggaran terkonfirmasi akan meningkatkan nilai operasional sistem dari analitik retrospektif menjadi instrumen pengawasan proaktif yang mendukung respons segera oleh personel keamanan kampus.
+
+\item \textbf{Pengembangan model deteksi multi-kelas untuk keselamatan lalu lintas yang lebih komprehensif.}
+Arsitektur pipeline yang dikembangkan bersifat modular dan dapat diperluas untuk mendeteksi jenis pelanggaran lalu lintas lainnya, seperti penggunaan telepon genggam saat berkendara, pelanggaran rambu lalu lintas, atau pengenalan pelat nomor kendaraan, dengan menambahkan kelas deteksi pada model tanpa mengubah arsitektur \textit{streaming} dan \textit{data mart} yang telah diimplementasikan.
+
+\item \textbf{Evaluasi pada skenario \textit{deployment} jangka panjang.}
+Pengujian \textit{benchmark} pada penelitian ini dilakukan pada video berdurasi terbatas (3.000 \textit{frame}). Evaluasi stabilitas dan reliabilitas sistem pada operasi kontinu selama 24 jam atau lebih diperlukan untuk mengidentifikasi potensi degradasi kinerja akibat \textit{memory leak}, akumulasi \textit{state} pelacakan, atau variasi beban komputasi pada skenario produksi sesungguhnya.
+
+\end{enumerate}

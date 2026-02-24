@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     # --- Violation Logic ---
     violation_confirm_frames: int = Field(default=3, ge=1)
     association_iou_threshold: float = Field(default=0.3, ge=0.0, le=1.0)
-    tracker_lost_buffer: int = Field(default=60, ge=1, description="Frames to keep lost tracks")
+    tracker_lost_buffer: int = Field(default=30, ge=1, description="Frames to keep lost tracks")
 
     # --- Kafka ---
     kafka_bootstrap_servers: str = Field(default="localhost:9092")
