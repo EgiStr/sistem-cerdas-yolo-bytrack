@@ -1,0 +1,14 @@
+{
+  "benchmark_id": "benchmark_run_1771951372",
+  "messages_sent": 1000,
+  "kafka_ingestion": {
+    "duration_seconds": 0.32,
+    "throughput_msg_per_sec": 3171.1
+  },
+  "spark_processing": {
+    "messages_processed": 0,
+    "success_rate": 0.0,
+    "end_to_end_duration_seconds": 121.75,
+    "avg_e2e_latency_seconds": "> 120 (Timeout)"
+  }
+}

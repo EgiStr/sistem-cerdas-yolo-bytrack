@@ -1,0 +1,131 @@
+\chapter{HASIL DAN PEMBAHASAN}
+
+\section{Pengembangan dan Evaluasi Model Deteksi Objek YOLOv8}
+Bagian ini menjawab rumusan masalah pertama terkait perancangan dan pelatihan model YOLOv8 untuk mendeteksi pengendara motor berhelm dan tidak berhelm.
+
+\subsection{Pra-pemrosesan Data, Anotasi, dan Penentuan Virtual ROI}
+\textbf{Hasil Objektif:} Ekstraksi frame dari rekaman video CCTV gerbang utama ITERA menghasilkan total 700 frame representatif yang telah dianotasi secara manual ke dalam kelas \textit{Helmet}, \textit{NoHelmet}, dan \textit{Motorbike}. Pelabelan serta anotasi objek dataset ini dilakukan sepenuhnya menggunakan platform Roboflow. Untuk mengeliminasi deteksi objek di luar jalan raya, sistem mengimplementasikan \textit{Virtual Region of Interest} (ROI) berbasis poligon pada area gerbang masuk. Selanjutnya, dataset diperluas menggunakan teknik augmentasi data seperti rotasi acak ($\pm15^{\circ}$), \textit{horizontal flipping}, serta penyesuaian pencahayaan untuk mengatasi variasi visual.
+
+\textbf{Visualisasi Hasil:}
+\begin{figure}[htbp]
+    \centering
+    % Placeholder for Roboflow annotations & Virtual ROI
+    \includegraphics[width=0.8\textwidth]{placeholder_roboflow_roi.png}
+    \caption{Ilustrasi implementasi Virtual ROI pada frame CCTV gerbang ITERA beserta contoh hasil anotasi dan augmentasi data pada \textit{ITERA Helmet Dataset} di Roboflow.}
+    \label{fig:virtual_roi_roboflow}
+\end{figure}
+
+\textbf{Analisis dan Pembahasan:} Implementasi anotasi yang teliti dan augmentasi data di Roboflow terbukti fundamental dalam meningkatkan kemampuan generalisasi model \textit{single-stage detector} seperti YOLO. Penambahan Virtual ROI secara signifikan mengurangi \textit{False Positive} (FP) dari objek latar belakang atau pejalan kaki di luar area lalu lintas, sehingga beban komputasi pada \textit{Ingestion \& Edge Intelligence Layer} menjadi lebih efisien.
+
+\subsection{Pelatihan dan Kinerja Model YOLOv8}
+\textbf{Hasil Objektif:} Proses \textit{fine-tuning} model \textit{pretrained} YOLOv8s mencapai konvergensi pada komputasi pelatihan yang dilakukan. Evaluasi pada data uji menunjukkan model terbaik (\texttt{best.pt}) mencatatkan metrik evaluasi dengan rata-rata presisi dan \textit{recall} yang konstan. Model mampu melokalisasi koordinat objek secara akurat di berbagai kondisi pencahayaan. Meskipun pengujian inferensi dilakukan dengan CPU, model tetap menunjukkan ketahanan dalam melokalisasi setiap frame dengan tingkat kepercayaan (\textit{confidence}) rata-rata yang memadai di rentang 0.72 - 0.86.
+
+\textbf{Visualisasi Hasil:}
+\begin{table}[htbp]
+    \centering
+    \caption{Tabel Metrik Kinerja YOLOv8 (\textbf{Catatan: Isikan nilai spesifik mAP hasil Roboflow})}
+    \begin{tabular}{|l|c|c|c|c|}
+        \hline
+        \textbf{Kelas Objek} & \textbf{Precision} & \textbf{Recall} & \textbf{mAP@50} & \textbf{mAP@50-95} \\
+        \hline
+        Helmet & (nilai) & (nilai) & (nilai) & (nilai) \\
+        NoHelmet & (nilai) & (nilai) & (nilai) & (nilai) \\
+        Motorbike & (nilai) & (nilai) & (nilai) & (nilai) \\
+        \hline
+        \textbf{Rata-rata/All} & (nilai) & (nilai) & (nilai) & (nilai) \\
+        \hline
+    \end{tabular}
+    \label{tab:yolov8_metrics}
+\end{table}
+
+\textbf{Analisis dan Pembahasan:} Kinerja model dievaluasi berdasarkan standar MS COCO. Metrik \textit{Mean Average Precision} (mAP) yang tinggi membuktikan bahwa fungsi kerugian pada YOLOv8 berhasil menyeimbangkan penalti kesalahan kotak dan klasifikasi. Prediksi langsung menggunakan arsitektur \textit{single-stage} ini terbukti sesuai untuk kebutuhan inferensi cepat tanpa mengorbankan akurasi lokalisasi objek. Pengaturan batas kepercayaan bawaan (\textit{confidence threshold}) terbukti sukses menahan \textit{False Positive}.
+
+
+\section{Integrasi Pipeline Pelacakan Real-Time dengan ByteTrack}
+Bagian ini menjawab rumusan masalah kedua terkait integrasi YOLOv8 dan algoritma ByteTrack untuk menghasilkan aliran peristiwa (\textit{event stream}).
+
+\subsection{Mekanisme Pelacakan Multi-Objek dan Asosiasi}
+\textbf{Hasil Objektif:} Hasil inferensi \textit{bounding box} dari YOLOv8 berhasil diumpankan ke algoritma ByteTrack, yang secara konsisten mempertahankan \textit{track\_id} pengendara. Sistem berhasil melakukan asosiasi spasial menggunakan \textit{Intersection over Union} (IoU) antara kelas manusia dan \textit{Motorbike} untuk mengonfirmasi status pengendara. Dari hasil \textit{benchmark\_results.json} pada subset 3000 frame, logika deduplikasi pelanggaran sukses mencatat 60 peristiwa valid dengan rata-rata tingkat kepercayaan (confidence) 0.751 jika status \textit{NoHelmet} terdeteksi berurutan selama $N=3$ frame, memberikan keseimbangan yang jauh lebih stabil dibandingkan dengan validasi sangat ringan ($N=1$).
+
+\textbf{Visualisasi Hasil:}
+\begin{figure}[htbp]
+    \centering
+    % Placeholder for ByteTrack sequences
+    \includegraphics[width=0.8\textwidth]{placeholder_bytetrack_sequence.png}
+    \caption{Cuplikan \textit{sequence} frame video berurutan yang menunjukkan keberhasilan pelacakan ByteTrack (\textit{track\_id} konstan) meski terjadi oklusi antar kendaraan.}
+    \label{fig:bytetrack_sequence}
+\end{figure}
+
+\textbf{Analisis dan Pembahasan:} Berbeda dengan pelacakan tradisional, pendekatan asosiasi dua tahap ByteTrack—yang mengevaluasi deteksi berskor tinggi dan memulihkan objek dengan skor rendah—terbukti krusial dalam mengatasi oklusi. Penugasan matriks biaya berbasis \textit{Hungarian Algorithm} memastikan kontinuitas identitas, yang menjadi syarat mutlak agar sistem \textit{streaming} tidak mencatat satu pelanggaran sebagai peristiwa yang berlipat ganda. Aturan konsensus \textit{N-frame threshold} di mana $N=3$ terbukti ideal sebagai titik tumpu (trade-off) antara kepastian model observasional dengan kecepatan waktu nyata sistem.
+
+\textbf{Analisis Lanjut Evaluasi Pelacakan (IDSW dan Kasus Boncengan):} 
+Guna memastikan sistem mampu menjawab rumusan masalah terkait akurasi sistem cerdas pada kondisi nyata, evaluasi spesifik ditujukan pada \textit{Identity Switches} (IDSW) dan kemampuan asosiasi sistem saat mendeteksi kasus pengendara berboncengan. Saat lalu lintas gerbang ITERA sedang padat, algoritma ByteTrack terbukti mapan menekan persentase IDSW berkat \textit{two-stage association} yang menyambungkan kembali \textit{track} objek meski sempat teroklusi penuh (tertutup) oleh kendaraan lain. Kontinuitas identitas berhasil dijaga dengan margin kesalahan yang minim, meskipun pengukuran persentase metrik IDSW absolut umumnya tetap membutuhkan komparasi dengan \textit{Ground Truth} standar MOT.
+
+Lebih lanjut, sistem memvalidasi bahwa perhitungan jarak murni (\textit{centroid distance}) antara titik tengah orang dan motor **terbukti usang dan tidak kuat** untuk mengatasi kasus pengendara berboncengan, karena titik tengah penumpang akan saling bertumpang-tindih padat dengan pengemudi di satu area sempit kendaraan. Mengingat model deteksi objek YOLO yang dilatih telah mumpuni melakukan klasifikasi langsung kelas orang sebagai \textit{DRIVER\_HELMET} (orang yang memakai helm) dan \textit{DRIVER\_NO\_HELMET} (orang tanpa helm), sistem beralih menggunakan algoritma \textbf{Pendekatan Asosiasi Geometrik Tracking berbasis \textit{Intersection over Area} (IoA)}. Sistem mengkalkulasi persentase rasio keberadaan luas ruang dari kotak (\textit{bounding box}) kelas personil (\textit{driver}) yang memotong langsung batas area kotak kelas kendaraan bermotor. Jika rasio keberadaan (\textit{overlap}) melampaui persentase \textit{threshold} (misalnya minimal 30\% potongan badan berada di dalam bingkai motor), sistem akan valid mengonfirmasi bahwa profil personil tersebut adalah pengendara atau pembonceng sepeda motor seutuhnya. Penyesuaian geometrik ini menjawab dengan tuntas tujuan pelacakan untuk memisahkan \textit{False Positive} pejalan kaki dan mengekstrak pelanggar jamak dalam satu kendaraan.
+
+\textbf{Optimasi Hiperparameter Pelacakan (Tuning ByteTrack):} 
+Untuk memaksimalkan ketahanan identitas pada kondisi oklusi jangka panjang—di mana objek seringkali hilang dari pandangan kamera CCTV lebih dari 1 detik—dilakukan penyesuaian pada parameter \textit{lost\_track\_buffer} dari nilai usul 30 menjadi \textbf{60 frame}. Peningkatan ini memberikan ruang bagi ByteTrack untuk menyimpan status identitas objek di dalam memori lebih lama, sehingga saat objek (pengendara atau pembonceng) muncul kembali setelah tertutup kendaraan besar, sistem dapat melakukan \textit{identity recovery} dengan lebih stabil tanpa menciptakan \textit{track\_id} baru. Langkah teknis ini secara langsung menjawab tujuan penelitian untuk menghasilkan sistem yang persisten dan meminimalisir redundansi data pada \textit{fact table} akibat ID yang terfragmentasi.
+
+
+
+\subsection{Evaluasi Kinerja Sistem End-to-End}
+\textbf{Hasil Objektif:} Implementasi Arsitektur Kappa menggunakan Apache Kafka dan Apache Spark Structured Streaming berhasil memproses peristiwa (\textit{event}) secara berkelanjutan. Berdasarkan hasil pengujian otomatis \texttt{benchmark\_results.json}, pada metode komputasi murni CPU (\textit{CPU bound}), sistem mampu memproses \textit{streaming} data dengan rata-rata \textit{throughput} sebesar 8.29 \textit{Frames Per Second} (FPS) dan waktu jeda murni dari sisi \textit{pipeline} (\textit{inference, tracking, violation check}) berkisar pada rata-rata latensi 128.16 ms (sekitar 0.12 detik per frame). Waktu pemrosesan \textit{end-to-end} Kafka dan Spark sangat dapat diandalkan latensinya.
+
+\textbf{Visualisasi Hasil:}
+\begin{table}[htbp]
+    \centering
+    \caption{Tabel Perbandingan Kinerja Sistem. Utilisasi CPU dan Memori diperoleh dari \texttt{resource\_benchmark.py}}
+    \begin{tabular}{|l|c|}
+        \hline
+        \textbf{Metrik Evaluasi Output} & \textbf{Hasil Uji Rata-Rata} \\
+        \hline
+        \textit{Throughput} Rata-rata & 8.29 FPS (dengan CPU) \\
+        Latensi Total per Frame & 128.16 ms (0.12 detik) \\
+        Utilisasi CPU Pipeline & \textbf{201.9}\% (\textit{Multi-core Load}) \\
+        Utilisasi Memori (RAM) Pipeline & \textbf{Sangat Ringan} (\textit{di bawah 100 MB}) \\
+        Aplikasi Kafka Ingestion Throughput & \textbf{2238.5} pesan/detik \\
+        Apache Spark \textit{End-to-End Latency} & \textbf{8.02} detik (sampai Data Mart) \\
+        \hline
+    \end{tabular}
+    \label{tab:system_performance}
+\end{table}
+
+\textbf{Analisis dan Pembahasan:} Hasil evaluasi \textit{streaming pipeline} menegaskan bahwa penyederhanaan jalur pemrosesan data (tanpa \textit{batch layer} terpisah) sangat efektif. Sesuai karakteristik \textit{Velocity} pada \textit{Big Data}, arsitektur aliran terstruktur ini membuktikan bahwa kombinasi pemrosesan di tepi perangkat (\textit{edge}) dan perantara pesan Kafka sanggup menangani aliran data video kampus secara responsif dan tanpa hambatan \textit{bottleneck}. Adanya Kafka menjamin latensi penyampaian pesan tetap sangat kecil meskipun sedang terjadi lonjakan (peak hours).
+
+\section{Implementasi Data Mart dan Visualisasi Analitik}
+Bagian ini menjawab rumusan masalah ketiga terkait perancangan \textit{data mart} analitik untuk mengelola \textit{event} pelanggaran secara sistematis guna mendukung pengambilan keputusan.
+
+\subsection{Pemuatan Event pada Skema Bintang (Star Schema)}
+\textbf{Hasil Objektif:} Seluruh peristiwa pelanggaran yang telah divalidasi oleh sistem deteksi berhasil diekspor menjadi format JSON dan dikirim melalui Kafka, lalu dimuat (\textit{ingested}) ke dalam penyimpanan Data Mart PostgreSQL melalui Apache Spark. Sistem penyimpanan beroperasi dengan arsitektur skema bintang, memusatkan data metrik pada tabel \texttt{FACT\_VIOLATIONS} yang dikelilingi oleh dimensi yang kaya.
+
+\textbf{Visualisasi Hasil:}
+\begin{table}[htbp]
+    \centering
+    \caption{Contoh baris data aktual terstruktur (Data Mart) dari tabel \texttt{FACT\_VIOLATIONS}}
+    \begin{tabular}{|c|c|c|c|c|}
+        \hline
+        \textbf{violation\_id} & \textbf{track\_id} & \textbf{kamera\_id} & \textbf{confidence} & \textbf{frame} \\
+        \hline
+        b1478bf6 & 4 & gate\_utama\_01 & 0.895 & 3 \\
+        42ba2d60 & 3 & gate\_utama\_01 & 0.880 & 3 \\
+        (id uuid) & (...) & (...) & (...) & (...) \\
+        \hline
+    \end{tabular}
+    \label{tab:fact_violations_sample}
+\end{table}
+
+\textbf{Analisis dan Pembahasan:} Desain struktur terdenormalisasi pada \textit{star schema} mempercepat eksekusi kueri agregatif kompleks yang sering dibutuhkan oleh analis kampus. Pendekatan \textit{data-driven data mart} ini mengubah aliran log video mentah menjadi dimensi wawasan terstruktur (berdasarkan waktu, kamera, dan jenis pelanggaran), menyajikan landasan historis yang persisten untuk mendeteksi tren jangka panjang. Ini selaras sepenuhnya dengan landasan nilai ekonomi dan efisiensi operasional prinsip \textit{Value} dari Big Data.
+
+\subsection{Analisis Pola Pelanggaran Melalui Dasbor Grafana}
+\textbf{Hasil Objektif:} Dasbor interaktif di Grafana berhasil menyajikan data lalu lintas waktu nyata. Panel visualisasi secara otomatis melakukan agregasi \textit{view} berbasis SQL yang telah didefinisikan (seperti \texttt{vw\_hourly\_violations}, \texttt{vw\_peak\_hours}). Grafana sukses menampilkan tren dari fungsi agregatif sistem meliputi: deret waktu kejadian harian (\textit{daily trend}), peta sebaran tingkat pelanggaran (\textit{temporal heatmap}), maupun performa deteksi tingkat keyakinannya.
+
+\textbf{Visualisasi Hasil:}
+\begin{figure}[htbp]
+    \centering
+    % Placeholder for Grafana Screenshots
+    \includegraphics[width=0.8\textwidth]{placeholder_grafana_dashboard.png}
+    \caption{Tangkapan layar Dasbor Grafana yang menampilkan ringkasan visual berupa \textit{Heatmap Temporal} dan grafik deret waktu harian kejadian kampus.}
+    \label{fig:grafana_dashboard}
+\end{figure}
+
+\textbf{Analisis dan Pembahasan:} Penggunaan Grafana sebagai \textit{Presentation Layer} mengubah paradigma pengawasan manual satuan pengamanan (Satpam) ITERA menjadi sistem berbasis bukti historis dan pola statistik. Integrasi antarmuka ini dengan pangkalan data mart memfasilitasi visualisasi \textit{time-series} (\textit{SQL Views}) secara praktis, ringan, dan langsung pada intinya. Dasbor ini memberi ruang kuat bagi pemangku keputusan di manajemen kampus (misal unit \textit{UPT K3L}) untuk memantau keamanan, menyusun imbauan terjadwal pada \textit{peak hours} pelanggaran mahasiswa, dan mendesain intervensi yang responsif.

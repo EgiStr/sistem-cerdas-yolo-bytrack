@@ -7,6 +7,7 @@ Maintains unique track IDs across frames, handling occlusion gracefully.
 
 import supervision as sv
 from loguru import logger
+from config.settings import settings
 
 
 class ObjectTracker:
@@ -15,7 +16,6 @@ class ObjectTracker:
     def __init__(
         self,
         track_activation_threshold: float = 0.25,
-        lost_track_buffer: int = 30,
         minimum_matching_threshold: float = 0.8,
         frame_rate: int = 15,
     ):
@@ -30,6 +30,9 @@ class ObjectTracker:
             minimum_matching_threshold: Minimum IoU for matching detections to existing tracks.
             frame_rate: Expected video frame rate for track age estimation.
         """
+        # Load lost_track_buffer from settings
+        lost_track_buffer = settings.tracker_lost_buffer
+        
         self.tracker = sv.ByteTrack(
             track_activation_threshold=track_activation_threshold,
             lost_track_buffer=lost_track_buffer,

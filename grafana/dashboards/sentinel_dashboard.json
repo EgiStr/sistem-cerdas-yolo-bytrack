@@ -31,18 +31,20 @@
       "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
       "id": 1,
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^violations_today$/" },
         "orientation": "auto",
         "textMode": "auto",
         "colorMode": "background"
       },
       "targets": [
         {
-          "rawSql": "SELECT COUNT(*) AS \"Total Pelanggaran Hari Ini\" FROM fact_violations WHERE date = CURRENT_DATE;",
-          "format": "table"
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+          "rawSql": "SELECT * FROM vw_kpi_summary;",
+          "format": "table",
+          "refId": "A"
         }
       ],
-      "title": "🚨 Pelanggaran Hari Ini",
+      "title": "Pelanggaran Hari Ini",
       "type": "stat"
     },
     {
@@ -63,16 +65,18 @@
       "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
       "id": 2,
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^avg_confidence$/" },
         "colorMode": "background"
       },
       "targets": [
         {
-          "rawSql": "SELECT AVG(confidence) AS \"Avg Confidence\" FROM fact_violations WHERE date = CURRENT_DATE;",
-          "format": "table"
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+          "rawSql": "SELECT * FROM vw_kpi_summary;",
+          "format": "table",
+          "refId": "A"
         }
       ],
-      "title": "🎯 Avg Confidence",
+      "title": "Avg Confidence",
       "type": "stat"
     },
     {
@@ -93,13 +97,15 @@
       "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
       "id": 3,
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^avg_latency_ms$/" },
         "colorMode": "background"
       },
       "targets": [
         {
-          "rawSql": "SELECT AVG(processing_latency_ms) AS \"Avg Latency\" FROM fact_violations WHERE date = CURRENT_DATE;",
-          "format": "table"
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+          "rawSql": "SELECT * FROM vw_kpi_summary;",
+          "format": "table",
+          "refId": "A"
         }
       ],
       "title": "⚡ Avg Latency",
@@ -120,13 +126,15 @@
       "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
       "id": 4,
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^total_violations_alltime$/" },
         "colorMode": "background"
       },
       "targets": [
         {
-          "rawSql": "SELECT COUNT(*) AS \"Total Semua\" FROM fact_violations;",
-          "format": "table"
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+          "rawSql": "SELECT * FROM vw_kpi_summary;",
+          "format": "table",
+          "refId": "A"
         }
       ],
       "title": "📈 Total Pelanggaran (All Time)",
@@ -159,11 +167,13 @@
       },
       "targets": [
         {
-          "rawSql": "SELECT date_trunc('hour', created_at) AS time, COUNT(*) AS violations FROM fact_violations WHERE created_at >= NOW() - INTERVAL '24 hours' GROUP BY 1 ORDER BY 1;",
-          "format": "time_series"
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+          "rawSql": "SELECT * FROM vw_daily_trend;",
+          "format": "time_series",
+          "refId": "A"
         }
       ],
-      "title": "📊 Tren Pelanggaran per Jam (24 Jam Terakhir)",
+      "title": "📊 Tren Pelanggaran Harian",
       "type": "timeseries"
     },
     {
@@ -176,10 +186,17 @@
       },
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 6 },
       "id": 6,
+      "options": {
+        "orientation": "horizontal",
+        "xTickLabelRotation": 0,
+        "showValue": "auto"
+      },
       "targets": [
         {
-          "rawSql": "SELECT camera_id, COUNT(*) AS violations FROM fact_violations WHERE date = CURRENT_DATE GROUP BY camera_id ORDER BY violations DESC;",
-          "format": "table"
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+          "rawSql": "SELECT * FROM vw_camera_stats;",
+          "format": "table",
+          "refId": "A"
         }
       ],
       "title": "📍 Distribusi per Kamera",
@@ -196,35 +213,83 @@
       "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "continuous-YlOrRd" },
-          "custom": { "fillOpacity": 70 }
-        }
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "#1a1a2e", "value": null },
+              { "color": "#2d6a4f", "value": 1 },
+              { "color": "#74c69d", "value": 5 },
+              { "color": "#f9c74f", "value": 10 },
+              { "color": "#f8961e", "value": 20 },
+              { "color": "#e63946", "value": 30 }
+            ]
+          },
+          "custom": {
+            "align": "center",
+            "cellOptions": {
+              "type": "color-background",
+              "mode": "basic"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Jam" },
+            "properties": [
+              { "id": "custom.width", "value": 50 },
+              { "id": "custom.cellOptions", "value": { "type": "auto" } },
+              { "id": "custom.align", "value": "center" }
+            ]
+          }
+        ]
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "gridPos": { "h": 12, "w": 12, "x": 0, "y": 15 },
       "id": 7,
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": { "show": false },
+        "sortBy": [{ "displayName": "Jam", "desc": false }]
+      },
       "targets": [
         {
-          "rawSql": "SELECT hour, CASE day_of_week WHEN 1 THEN 'Minggu' WHEN 2 THEN 'Senin' WHEN 3 THEN 'Selasa' WHEN 4 THEN 'Rabu' WHEN 5 THEN 'Kamis' WHEN 6 THEN 'Jumat' WHEN 7 THEN 'Sabtu' END AS hari, COUNT(*) AS violations FROM fact_violations GROUP BY hour, day_of_week ORDER BY day_of_week, hour;",
-          "format": "table"
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+          "rawSql": "SELECT * FROM vw_heatmap_hour_day;",
+          "format": "table",
+          "refId": "A"
         }
       ],
       "title": "🔥 Heatmap: Jam × Hari",
-      "type": "heatmap"
+      "type": "table"
     },
     {
       "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "fillOpacity": 60 }
+          "color": { "mode": "palette-classic" }
         }
       },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
       "id": 8,
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "pieType": "donut",
+        "tooltip": { "mode": "multi" },
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": ["value", "percent"]
+        }
+      },
       "targets": [
         {
-          "rawSql": "SELECT time_period, COUNT(*) AS violations FROM fact_violations GROUP BY time_period ORDER BY CASE time_period WHEN 'pagi' THEN 1 WHEN 'siang' THEN 2 WHEN 'sore' THEN 3 WHEN 'malam' THEN 4 END;",
-          "format": "table"
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+          "rawSql": "SELECT * FROM vw_time_period_distribution;",
+          "format": "table",
+          "refId": "A"
         }
       ],
       "title": "🕐 Distribusi per Waktu (Pagi/Siang/Sore/Malam)",
@@ -243,15 +308,41 @@
       "id": 9,
       "options": {
         "showHeader": true,
-        "sortBy": [{ "displayName": "Waktu", "desc": true }]
+        "sortBy": [{ "displayName": "Waktu", "desc": true }],
+        "footer": {
+          "show": true,
+          "reducer": ["count"],
+          "countRows": true
+        }
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Confidence" },
+            "properties": [
+              { "id": "custom.width", "value": 100 },
+              { "id": "decimals", "value": 3 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Latency (ms)" },
+            "properties": [
+              { "id": "custom.width", "value": 110 },
+              { "id": "decimals", "value": 1 }
+            ]
+          }
+        ]
       },
       "targets": [
         {
-          "rawSql": "SELECT created_at AS \"Waktu\", camera_id AS \"Kamera\", violation_type AS \"Tipe\", ROUND(confidence::numeric, 2) AS \"Confidence\", track_id AS \"Track ID\", ROUND(processing_latency_ms::numeric, 1) AS \"Latency (ms)\", time_period AS \"Periode\" FROM fact_violations ORDER BY created_at DESC LIMIT 50;",
-          "format": "table"
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+          "rawSql": "SELECT * FROM vw_recent_violations;",
+          "format": "table",
+          "refId": "A"
         }
       ],
-      "title": "📋 50 Pelanggaran Terakhir",
+      "title": "📋 100 Pelanggaran Terakhir",
       "type": "table"
     }
   ],
@@ -259,7 +350,7 @@
   "schemaVersion": 39,
   "tags": ["sentinel", "itera", "safety"],
   "templating": { "list": [] },
-  "time": { "from": "now-24h", "to": "now" },
+  "time": { "from": "now-7d", "to": "now" },
   "timepicker": {},
   "timezone": "Asia/Jakarta",
   "title": "ITERA Smart Sentinel - Safety Dashboard",

@@ -47,7 +47,8 @@ DB_NAME = os.getenv("SUPABASE_DB_NAME", "postgres")
 DB_USER = os.getenv("SUPABASE_DB_USER", "postgres")
 DB_PASSWORD = os.getenv("SUPABASE_DB_PASSWORD", "")
 
-JDBC_URL = f"jdbc:postgresql://{DB_HOST}:{DB_PORT}/{DB_NAME}"
+SSL_MODE = "disable" if DB_HOST == "localhost" else "require"
+JDBC_URL = f"jdbc:postgresql://{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode={SSL_MODE}&prepareThreshold=0"
 CHECKPOINT_DIR = os.getenv("SPARK_CHECKPOINT_DIR", "/tmp/sentinel-checkpoints")
 
 # ─── Event Schema ──────────────────────────────────────────────
@@ -200,7 +201,6 @@ def write_to_postgres(batch_df: DataFrame, batch_id: int):
     # Since dim_time has serial PK, we write fact with NULL time_id
     # and update via a DB trigger/view, OR embed the time data directly.
 
-    # For simplicity, we write the violation directly with embedded time data.
     fact_df = batch_df.select(
         F.col("event_id").alias("violation_id"),
         F.col("camera_id"),

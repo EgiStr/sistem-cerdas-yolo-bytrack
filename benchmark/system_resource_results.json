@@ -1,0 +1,43 @@
+{
+  "benchmark_info": {
+    "video_source": "test.mp4",
+    "frames": 3000,
+    "duration_seconds": 528.33,
+    "timestamp": "2026-02-25T01:07:31.854445"
+  },
+  "resource_usage": {
+    "pipeline": {
+      "samples_collected": 1053,
+      "cpu_percent": {
+        "avg": 243.61,
+        "peak": 297.6
+      },
+      "memory_mb": {
+        "avg": 960.02,
+        "peak": 966.69
+      }
+    },
+    "kafka": {
+      "samples_collected": 1053,
+      "cpu_percent": {
+        "avg": 0.67,
+        "peak": 7.9
+      },
+      "memory_mb": {
+        "avg": 233.77,
+        "peak": 234.92
+      }
+    },
+    "spark": {
+      "samples_collected": 1053,
+      "cpu_percent": {
+        "avg": 19.83,
+        "peak": 155.8
+      },
+      "memory_mb": {
+        "avg": 757.02,
+        "peak": 835.0
+      }
+    }
+  }
+}

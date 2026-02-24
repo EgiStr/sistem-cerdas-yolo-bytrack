@@ -1,0 +1,22 @@
+{
+  "benchmark_info": {
+    "video_source": "test.mp4",
+    "resolution": "1280x720",
+    "video_fps": 25.0,
+    "frames_processed": 100,
+    "total_time_seconds": 16.16,
+    "device": "cpu",
+    "timestamp": "2026-02-25T00:38:59.723348"
+  },
+  "resource_usage": {
+    "samples_collected": 34,
+    "cpu_percent": {
+      "avg": 252.58,
+      "peak": 297.7
+    },
+    "memory_mb": {
+      "avg": 956.93,
+      "peak": 962.84
+    }
+  }
+}

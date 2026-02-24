@@ -113,6 +113,42 @@ class SentinelPipeline:
             scene=annotated, detections=detections, labels=labels
         )
 
+        # Draw One-to-Many Association Lines (Rider to Motorbike via IoA)
+        # Import compute_ioa here to avoid circular imports if any, or assume it's available
+        from src.detector.violation import compute_ioa
+        
+        # Class IDs (match model: {0: DRIVER_HELMET, 1: DRIVER_NO_HELMET, 2: MOTORCYCLE})
+        # Note: In violation.py NO_HELMET is 0 and HELMET is 1 due to swapping.
+        # We will use the same indices used in violation.py logic.
+        class_ids = detections.class_id
+        xyxy = detections.xyxy
+        
+        # Masks for riders (Helmet/NoHelmet) and Motorbikes
+        rider_mask = (class_ids == 0) | (class_ids == 1)
+        motorbike_mask = (class_ids == 2)
+        
+        rider_indices = np.where(rider_mask)[0]
+        motorbike_indices = np.where(motorbike_mask)[0]
+
+        iou_threshold = settings.association_iou_threshold  # typically 0.3
+        
+        # For each motorbike, find all riders associated with it (One-to-Many)
+        for m_idx in motorbike_indices:
+            m_box = xyxy[m_idx]
+            m_center = (int((m_box[0] + m_box[2]) / 2), int((m_box[1] + m_box[3]) / 2))
+            
+            for r_idx in rider_indices:
+                r_box = xyxy[r_idx]
+                r_center = (int((r_box[0] + r_box[2]) / 2), int((r_box[1] + r_box[3]) / 2))
+                
+                ioa = compute_ioa(r_box, m_box)
+                if ioa >= iou_threshold:
+                    # Draw a line connecting rider to motorbike
+                    # Green line for successful spatial association
+                    cv2.line(annotated, r_center, m_center, (0, 255, 0), 2)
+                    cv2.circle(annotated, r_center, 4, (255, 0, 0), -1) # Blue dot for rider
+                    cv2.circle(annotated, m_center, 4, (0, 0, 255), -1) # Red dot for motor
+
         # Add FPS and violation count overlay
         fps_text = f"FPS: {self._fps_history[-1]:.1f}" if self._fps_history else "FPS: --"
         cv2.putText(
@@ -178,12 +214,13 @@ class SentinelPipeline:
                 )
 
                 # Step 4: Send to Kafka
-                if violations and self.producer:
-                    processing_latency = (time.time() - frame_start) * 1000
-                    for v in violations:
-                        v.processing_latency_ms = processing_latency
-                    self.producer.send_batch(violations)
+                if violations:
                     self._total_violations += len(violations)
+                    if self.producer:
+                        processing_latency = (time.time() - frame_start) * 1000
+                        for v in violations:
+                            v.processing_latency_ms = processing_latency
+                        self.producer.send_batch(violations)
 
                 # Calculate FPS
                 frame_time = time.time() - frame_start

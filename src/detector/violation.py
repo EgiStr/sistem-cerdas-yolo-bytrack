@@ -43,6 +43,26 @@ def compute_iou(box_a: np.ndarray, box_b: np.ndarray) -> float:
     return intersection / union if union > 0 else 0.0
 
 
+def compute_ioa(box_a: np.ndarray, box_b: np.ndarray) -> float:
+    """
+    Compute Intersection over Area (IoA) of box_a with respect to box_b.
+    Useful for checking if a person (box_a) is riding a motorbike (box_b).
+
+    Args:
+        box_a: [x1, y1, x2, y2] (e.g., person/driver)
+        box_b: [x1, y1, x2, y2] (e.g., motorbike)
+    """
+    x1 = max(box_a[0], box_b[0])
+    y1 = max(box_a[1], box_b[1])
+    x2 = min(box_a[2], box_b[2])
+    y2 = min(box_a[3], box_b[3])
+
+    intersection = max(0, x2 - x1) * max(0, y2 - y1)
+    area_a = (box_a[2] - box_a[0]) * (box_a[3] - box_a[1])
+
+    return intersection / area_a if area_a > 0 else 0.0
+
+
 def compute_centroid_distance(box_a: np.ndarray, box_b: np.ndarray) -> float:
     """Compute Euclidean distance between centroids of two boxes."""
     cx_a = (box_a[0] + box_a[2]) / 2
@@ -77,9 +97,14 @@ class ViolationDetector:
         self.confirm_frames = confirm_frames or settings.violation_confirm_frames
         self.iou_threshold = iou_threshold or settings.association_iou_threshold
         self.camera_id = camera_id or settings.camera_id
+        # Patience for transient occlusion (number of frames a track can be missing without resetting streak)
+        self.patience_frames = 2 
 
         # State tracking: track_id -> consecutive NoHelmet frame count
         self._no_helmet_streak: dict[int, int] = defaultdict(int)
+
+        # State tracking: track_id -> consecutive frames missing from NoHelmet detections
+        self._missing_count: dict[int, int] = defaultdict(int)
 
         # Set of track_ids that already emitted a violation (dedup)
         self._violated_ids: set[int] = set()
@@ -125,6 +150,10 @@ class ViolationDetector:
         no_helmet_mask = class_ids == self.NO_HELMET
         no_helmet_indices = np.where(no_helmet_mask)[0]
 
+        # Get indices for MOTORCYCLE
+        motorcycle_mask = class_ids == self.MOTORBIKE
+        motorcycle_indices = np.where(motorcycle_mask)[0]
+
         if len(no_helmet_indices) == 0:
             # Decay streak for tracks not seen as NoHelmet
             self._decay_streaks(tracker_ids, no_helmet_indices)
@@ -143,8 +172,25 @@ class ViolationDetector:
             if nh_track_id in self._violated_ids:
                 continue
 
-            # DRIVER_NO_HELMET is a direct violation signal — increment streak
+            # Geometric Spatial Association (IoA) for Pillion Riders (Boncengan)
+            # Check if this NO_HELMET driver is geometrically associated with any MOTORCYCLE
+            is_riding = False
+            for m_idx in motorcycle_indices:
+                m_box = xyxy[m_idx]
+                ioa = compute_ioa(nh_box, m_box)
+                # If >= 20% of the person's bounding box overlaps with a motorcycle, consider them riding
+                if ioa >= 0.2:
+                    is_riding = True
+                    break
+
+            if not is_riding and len(motorcycle_indices) > 0:
+                # If there are motorcycles but this person doesn't overlap with any, they might be a pedestrian (False Positive)
+                # We skip incrementing their violation streak.
+                continue
+
+            # DRIVER_NO_HELMET confirmed — increment streak and reset missing count
             self._no_helmet_streak[nh_track_id] += 1
+            self._missing_count[nh_track_id] = 0
             self._confidence_accumulator[nh_track_id].append(float(nh_confidence))
 
             # Check if confirmed (N consecutive frames)
@@ -190,15 +236,20 @@ class ViolationDetector:
             if all_tracker_ids[idx] is not None:
                 current_no_helmet_ids.add(int(all_tracker_ids[idx]))
 
-        # Reset streak for tracks not in current NoHelmet
+        # Reset streak for tracks not in current NoHelmet only if patience exceeded
         for track_id in list(self._no_helmet_streak.keys()):
             if track_id not in current_no_helmet_ids:
-                self._no_helmet_streak[track_id] = 0
-                self._confidence_accumulator[track_id].clear()
+                self._missing_count[track_id] += 1
+                
+                if self._missing_count[track_id] > self.patience_frames:
+                    self._no_helmet_streak[track_id] = 0
+                    self._missing_count[track_id] = 0
+                    self._confidence_accumulator[track_id].clear()
 
     def reset(self):
         """Reset all violation state. Used when switching video sources."""
         self._no_helmet_streak.clear()
+        self._missing_count.clear()
         self._violated_ids.clear()
         self._confidence_accumulator.clear()
         logger.info("ViolationDetector state reset")
