@@ -1,26 +1,34 @@
 -- ============================================
 -- ITERA Smart Sentinel - Fact Table
 -- Central fact table for violation events
+-- Sesuai proposal Gambar 3.2 dengan tambahan
+-- denormalized time fields untuk optimasi Grafana
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS fact_violations (
-    violation_id VARCHAR(36) PRIMARY KEY,
-    camera_id VARCHAR(50) REFERENCES dim_camera(camera_id),
+    violation_pk BIGSERIAL PRIMARY KEY,
+
+    -- Foreign keys (Star Schema sesuai Gambar 3.2)
+    timestamp_fk INT REFERENCES dim_time(time_id),
+    camera_fk INT REFERENCES dim_camera(camera_pk),
+    violation_type_fk INT REFERENCES dim_violation_type(type_pk),
+
+    -- Degenerate dimensions
     track_id INT NOT NULL,
-    violation_type VARCHAR(50) DEFAULT 'no_helmet',
     confidence FLOAT NOT NULL,
-    
+
     -- Bounding box
     bbox_x1 INT,
     bbox_y1 INT,
     bbox_x2 INT,
     bbox_y2 INT,
-    
-    -- Performance metrics
+
+    -- Measures
     frame_number INT,
     processing_latency_ms FLOAT,
-    
-    -- Embedded time dimensions (denormalized for query speed)
+    violation_count INT DEFAULT 1,
+
+    -- Denormalized time fields (optimasi: menghindari JOIN untuk Grafana)
     hour INT,
     minute INT,
     day_of_week INT,
@@ -29,7 +37,7 @@ CREATE TABLE IF NOT EXISTS fact_violations (
     month INT,
     year INT,
     time_period VARCHAR(20),
-    
+
     -- Metadata
     created_at TIMESTAMP DEFAULT NOW()
 );
@@ -38,21 +46,24 @@ CREATE TABLE IF NOT EXISTS fact_violations (
 -- Indexes for Grafana dashboard queries
 -- ============================================
 
-CREATE INDEX IF NOT EXISTS idx_fact_violations_created_at 
+CREATE INDEX IF NOT EXISTS idx_fv_created_at
     ON fact_violations (created_at);
 
-CREATE INDEX IF NOT EXISTS idx_fact_violations_date 
+CREATE INDEX IF NOT EXISTS idx_fv_date
     ON fact_violations (date);
 
-CREATE INDEX IF NOT EXISTS idx_fact_violations_hour 
+CREATE INDEX IF NOT EXISTS idx_fv_hour
     ON fact_violations (hour);
 
-CREATE INDEX IF NOT EXISTS idx_fact_violations_camera 
-    ON fact_violations (camera_id);
+CREATE INDEX IF NOT EXISTS idx_fv_camera_fk
+    ON fact_violations (camera_fk);
 
-CREATE INDEX IF NOT EXISTS idx_fact_violations_time_period 
+CREATE INDEX IF NOT EXISTS idx_fv_time_period
     ON fact_violations (time_period);
 
+CREATE INDEX IF NOT EXISTS idx_fv_timestamp_fk
+    ON fact_violations (timestamp_fk);
+
 -- Composite index for common dashboard queries
-CREATE INDEX IF NOT EXISTS idx_fact_violations_date_hour_camera 
-    ON fact_violations (date, hour, camera_id);
+CREATE INDEX IF NOT EXISTS idx_fv_date_hour_camera
+    ON fact_violations (date, hour, camera_fk);

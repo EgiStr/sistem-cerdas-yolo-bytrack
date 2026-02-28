@@ -47,10 +47,10 @@ Key processing: 30-second watermark dedup by `(track_id, camera_id)`, Indonesian
 
 ## Database Schema
 
-Star Schema defined in `sql/` (run in order: `001` → `002` → `003`):
-- **Dimensions:** `dim_camera`, `dim_violation_type`
-- **Fact:** `fact_violations` — has embedded (denormalized) time fields for fast Grafana queries
-- **Views:** `sql/003_create_views.sql` defines 6 analytical views (`vw_hourly_violations`, `vw_daily_trend`, etc.) consumed by Grafana
+Star Schema defined in `sql/` (run in order: `001` → `002` → `003`), sesuai proposal Gambar 3.2:
+- **Dimensions:** `dim_time` (auto-populated by Spark), `dim_camera` (surrogate `camera_pk`, business key `camera_id`), `dim_violation_type` (surrogate `type_pk`)
+- **Fact:** `fact_violations` — uses surrogate FK (`timestamp_fk`, `camera_fk`, `violation_type_fk`) + denormalized time fields for fast Grafana queries
+- **Views:** `sql/003_create_views.sql` defines 6+ analytical views (`vw_kpi_summary`, `vw_daily_trend`, `vw_camera_stats`, etc.) consumed by Grafana
 
 ## Developer Commands
 

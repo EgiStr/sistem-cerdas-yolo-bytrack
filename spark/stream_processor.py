@@ -163,15 +163,17 @@ def deduplicate_events(df: DataFrame) -> DataFrame:
 
 def write_to_postgres(batch_df: DataFrame, batch_id: int):
     """
-    Write a micro-batch to PostgreSQL using JDBC.
+    Write a micro-batch to PostgreSQL Star Schema (sesuai Gambar 3.2).
 
     Called by foreachBatch sink for each micro-batch.
-    Handles both dim_time and fact_violations tables.
+    Flow: populate dim_time → resolve FKs → write fact_violations.
     """
     if batch_df.isEmpty():
         return
 
-    print(f"[Batch {batch_id}] Writing {batch_df.count()} violations to PostgreSQL...")
+    spark = batch_df.sparkSession
+    count = batch_df.count()
+    print(f"[Batch {batch_id}] Processing {count} violations...")
 
     jdbc_properties = {
         "user": DB_USER,
@@ -179,46 +181,108 @@ def write_to_postgres(batch_df: DataFrame, batch_id: int):
         "driver": "org.postgresql.Driver",
     }
 
-    # ── Write to dim_time (upsert via temp table) ──
+    # ── 1. Populate dim_time with new timestamps ──────────────
     time_df = (
         batch_df.select(
             F.col("event_timestamp").alias("full_timestamp"),
-            "hour", "minute", "day_of_week", "date",
-            "week_of_year", "month", "year", "time_period",
+            F.to_date("event_timestamp").alias("date"),
+            F.year("event_timestamp").alias("year"),
+            F.month("event_timestamp").alias("month"),
+            F.dayofweek("event_timestamp").alias("day_of_week"),
+            F.hour("event_timestamp").alias("hour_of_day"),
+            F.col("time_period").alias("time_name"),
+            F.when(F.dayofweek("event_timestamp").isin(1, 7), True)
+             .otherwise(False).alias("is_weekend"),
+            F.lit(False).alias("is_exam_period"),
         )
         .distinct()
     )
 
-    time_df.write.jdbc(
-        url=JDBC_URL,
-        table="dim_time",
-        mode="append",
-        properties=jdbc_properties,
+    # Avoid duplicate inserts (dim_time.full_timestamp is UNIQUE)
+    existing_ts = (
+        spark.read.jdbc(JDBC_URL, "dim_time", properties=jdbc_properties)
+        .select("full_timestamp")
+    )
+    new_time = time_df.join(existing_ts, "full_timestamp", "left_anti")
+
+    if new_time.count() > 0:
+        new_time.write.jdbc(
+            url=JDBC_URL,
+            table="dim_time",
+            mode="append",
+            properties=jdbc_properties,
+        )
+
+    # ── 2. Read dimension tables for FK resolution ────────────
+    dim_time = (
+        spark.read.jdbc(JDBC_URL, "dim_time", properties=jdbc_properties)
+        .select(
+            F.col("time_id"),
+            F.col("full_timestamp").alias("dt_full_timestamp"),
+        )
+    )
+    dim_camera = (
+        spark.read.jdbc(JDBC_URL, "dim_camera", properties=jdbc_properties)
+        .select(
+            F.col("camera_pk"),
+            F.col("camera_id").alias("dc_camera_id"),
+        )
+    )
+    dim_vtype = (
+        spark.read.jdbc(JDBC_URL, "dim_violation_type", properties=jdbc_properties)
+        .select(
+            F.col("type_pk"),
+            F.col("type_code").alias("dv_type_code"),
+        )
     )
 
-    # ── Write to fact_violations ──
-    # Get the time_id for each event by matching timestamp
-    # Since dim_time has serial PK, we write fact with NULL time_id
-    # and update via a DB trigger/view, OR embed the time data directly.
-
-    fact_df = batch_df.select(
-        F.col("event_id").alias("violation_id"),
-        F.col("camera_id"),
-        F.col("track_id"),
-        F.col("violation_type"),
-        F.col("confidence"),
-        F.col("bbox_x1"),
-        F.col("bbox_y1"),
-        F.col("bbox_x2"),
-        F.col("bbox_y2"),
-        F.col("frame_number"),
-        F.col("processing_latency_ms"),
-        F.col("event_timestamp").alias("created_at"),
-        # Embedded time fields (for direct Grafana queries)
-        "hour", "minute", "day_of_week", "date",
-        "week_of_year", "month", "year", "time_period",
+    # ── 3. Join batch with dimensions to resolve FKs ──────────
+    fact_df = (
+        batch_df
+        .join(
+            dim_time,
+            batch_df["event_timestamp"] == dim_time["dt_full_timestamp"],
+            "left",
+        )
+        .join(
+            dim_camera,
+            batch_df["camera_id"] == dim_camera["dc_camera_id"],
+            "left",
+        )
+        .join(
+            dim_vtype,
+            batch_df["violation_type"] == dim_vtype["dv_type_code"],
+            "left",
+        )
+        .select(
+            # Star Schema foreign keys (Gambar 3.2)
+            F.col("time_id").alias("timestamp_fk"),
+            F.col("camera_pk").alias("camera_fk"),
+            F.col("type_pk").alias("violation_type_fk"),
+            # Degenerate dimensions & measures
+            batch_df["track_id"],
+            batch_df["confidence"],
+            batch_df["bbox_x1"],
+            batch_df["bbox_y1"],
+            batch_df["bbox_x2"],
+            batch_df["bbox_y2"],
+            batch_df["frame_number"],
+            batch_df["processing_latency_ms"],
+            F.lit(1).alias("violation_count"),
+            # Denormalized time fields (Grafana optimization)
+            batch_df["hour"],
+            batch_df["minute"],
+            batch_df["day_of_week"],
+            batch_df["date"],
+            batch_df["week_of_year"],
+            batch_df["month"],
+            batch_df["year"],
+            batch_df["time_period"],
+            batch_df["event_timestamp"].alias("created_at"),
+        )
     )
 
+    # ── 4. Write to fact_violations ───────────────────────────
     fact_df.write.jdbc(
         url=JDBC_URL,
         table="fact_violations",
@@ -226,7 +290,7 @@ def write_to_postgres(batch_df: DataFrame, batch_id: int):
         properties=jdbc_properties,
     )
 
-    print(f"[Batch {batch_id}] ✅ Written to PostgreSQL successfully")
+    print(f"[Batch {batch_id}] ✅ Written {count} violations to PostgreSQL")
 
 
 def main():

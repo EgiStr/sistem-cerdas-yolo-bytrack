@@ -65,17 +65,17 @@ ORDER BY date;
 -- Pre-formatted with camera name fallback and rounded metrics
 CREATE OR REPLACE VIEW vw_camera_stats AS
 SELECT
-    f.camera_id,
-    COALESCE(c.camera_name, f.camera_id)                AS camera_name,
-    COALESCE(c.gate_name, '-')                          AS gate_name,
+    c.camera_id,
+    COALESCE(c.camera_name, c.camera_id)                AS camera_name,
+    COALESCE(c.location_description, '-')               AS location,
     COUNT(*)                                            AS total_violations,
     ROUND(AVG(f.confidence)::numeric, 3)                AS avg_confidence,
     ROUND(AVG(f.processing_latency_ms)::numeric, 1)     AS avg_latency_ms,
     MIN(f.created_at)                                   AS first_violation,
     MAX(f.created_at)                                   AS last_violation
 FROM fact_violations f
-LEFT JOIN dim_camera c ON f.camera_id = c.camera_id
-GROUP BY f.camera_id, c.camera_name, c.gate_name
+LEFT JOIN dim_camera c ON f.camera_fk = c.camera_pk
+GROUP BY c.camera_id, c.camera_name, c.location_description
 ORDER BY total_violations DESC;
 
 
@@ -134,17 +134,18 @@ FROM fact_violations;
 CREATE OR REPLACE VIEW vw_recent_violations AS
 SELECT
     f.created_at                                        AS "Waktu",
-    f.camera_id                                         AS "Camera ID",
-    COALESCE(c.camera_name, f.camera_id)                AS "Kamera",
-    COALESCE(c.gate_name, '-')                          AS "Gate",
-    f.violation_type                                    AS "Tipe",
+    c.camera_id                                         AS "Camera ID",
+    COALESCE(c.camera_name, c.camera_id)                AS "Kamera",
+    COALESCE(c.location_description, '-')               AS "Lokasi",
+    COALESCE(vt.type_name, '-')                         AS "Tipe",
     ROUND(f.confidence::numeric, 3)                     AS "Confidence",
     f.track_id                                          AS "Track ID",
     ROUND(f.processing_latency_ms::numeric, 1)          AS "Latency (ms)",
     f.time_period                                       AS "Periode",
     f.hour                                              AS "Jam"
 FROM fact_violations f
-LEFT JOIN dim_camera c ON f.camera_id = c.camera_id
+LEFT JOIN dim_camera c ON f.camera_fk = c.camera_pk
+LEFT JOIN dim_violation_type vt ON f.violation_type_fk = vt.type_pk
 ORDER BY f.created_at DESC
 LIMIT 100;
 
@@ -156,16 +157,17 @@ LIMIT 100;
 -- ── Hourly violations (used internally by vw_heatmap_hour_day) ──
 CREATE OR REPLACE VIEW vw_hourly_violations AS
 SELECT
-    date,
-    hour,
-    day_of_week,
-    time_period,
-    camera_id,
+    f.date,
+    f.hour,
+    f.day_of_week,
+    f.time_period,
+    c.camera_id,
     COUNT(*)                        AS violation_count,
-    AVG(confidence)                 AS avg_confidence,
-    AVG(processing_latency_ms)      AS avg_latency_ms
-FROM fact_violations
-GROUP BY date, hour, day_of_week, time_period, camera_id;
+    AVG(f.confidence)               AS avg_confidence,
+    AVG(f.processing_latency_ms)    AS avg_latency_ms
+FROM fact_violations f
+LEFT JOIN dim_camera c ON f.camera_fk = c.camera_pk
+GROUP BY f.date, f.hour, f.day_of_week, f.time_period, c.camera_id;
 
 
 -- ── Today's summary (used internally by vw_kpi_summary) ──
