@@ -88,6 +88,14 @@ class ViolationDetector:
     NO_HELMET = 0    # DRIVER_HELMET as violation trigger (original: 1)
     MOTORBIKE = 2    # MOTORCYCLE
 
+    # Mapping class_id → dim_violation_type.type_code
+    # Tambah entry baru di sini saat ada tipe pelanggaran baru di model/DB
+    VIOLATION_TYPE_MAP: dict[int, str] = {
+        0: "no_helmet",   # TESTING: DRIVER_HELMET as violation trigger
+        1: "no_helmet",   # PRODUCTION: DRIVER_NO_HELMET
+        # Contoh future: 3: "no_helmet_passenger",
+    }
+
     def __init__(
         self,
         confirm_frames: int | None = None,
@@ -200,12 +208,13 @@ class ViolationDetector:
             # Check if confirmed (N consecutive frames)
             if self._no_helmet_streak[nh_track_id] >= self.confirm_frames:
                 avg_confidence = np.mean(self._confidence_accumulator[nh_track_id])
+                vtype = self.VIOLATION_TYPE_MAP.get(int(class_ids[nh_idx]), "no_helmet")
 
                 violation = ViolationEvent(
                     track_id=int(nh_track_id),
                     timestamp=datetime.now(timezone.utc),
                     camera_id=self.camera_id,
-                    violation_type="no_helmet",
+                    violation_type=vtype,
                     confidence=float(avg_confidence),
                     bbox=BoundingBox(
                         x1=float(nh_box[0]),
