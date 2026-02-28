@@ -23,6 +23,7 @@ from src.detector.model import HelmetDetector
 from src.detector.tracker import ObjectTracker
 from src.detector.violation import ViolationDetector
 from src.streaming.producer import ViolationProducer
+from src.pipeline.debug_display import DebugDisplay
 
 
 class SentinelPipeline:
@@ -33,6 +34,9 @@ class SentinelPipeline:
     and event streaming in a single main loop.
     """
 
+    # Valid debug modes
+    DEBUG_MODES = ("detection", "tracking", "ioa", "violation", "full")
+
     def __init__(
         self,
         video_source: str | None = None,
@@ -40,12 +44,14 @@ class SentinelPipeline:
         show_display: bool = False,
         save_output: str | None = None,
         frame_stride: int | None = None,
+        debug_mode: str | None = None,
     ):
         self.video_source = video_source or settings.video_source
         self.enable_kafka = enable_kafka
         self.show_display = show_display
         self.save_output = save_output
         self.frame_stride = frame_stride or settings.pipeline_frame_stride
+        self.debug_mode = debug_mode
 
         # Initialize components
         logger.info("=" * 60)
@@ -56,6 +62,18 @@ class SentinelPipeline:
         # Tracker is initialized after opening video to use actual FPS
         self.tracker: ObjectTracker | None = None
         self.violation_checker = ViolationDetector()
+
+        # Debug display (step-by-step pipeline visualization)
+        self.debug_display: DebugDisplay | None = None
+        if self.debug_mode:
+            if self.debug_mode not in self.DEBUG_MODES:
+                raise ValueError(
+                    f"Invalid debug mode '{self.debug_mode}'. "
+                    f"Choose from: {', '.join(self.DEBUG_MODES)}"
+                )
+            self.debug_display = DebugDisplay(violation_checker=self.violation_checker)
+            self.show_display = True  # Force display on for debug modes
+            logger.info(f"🔍 DEBUG MODE: {self.debug_mode}")
 
         if self.enable_kafka:
             self.producer = ViolationProducer()
@@ -415,7 +433,24 @@ class SentinelPipeline:
 
                 # Step 5: Visualize (optional)
                 if self.show_display or writer:
-                    annotated = self._annotate_frame(frame, tracked)
+                    if self.debug_display:
+                        self.debug_display.set_stats(
+                            self._frame_count, fps, self._total_violations
+                        )
+                        if self.debug_mode == "detection":
+                            annotated = self.debug_display.draw_detection(frame, detections)
+                        elif self.debug_mode == "tracking":
+                            annotated = self.debug_display.draw_tracking(frame, detections, tracked)
+                        elif self.debug_mode == "ioa":
+                            annotated = self.debug_display.draw_ioa(frame, tracked)
+                        elif self.debug_mode == "violation":
+                            annotated = self.debug_display.draw_violation(frame, tracked)
+                        elif self.debug_mode == "full":
+                            annotated = self.debug_display.draw_full(frame, detections, tracked)
+                        else:
+                            annotated = self._annotate_frame(frame, tracked)
+                    else:
+                        annotated = self._annotate_frame(frame, tracked)
                     if writer:
                         writer.write(annotated)
                     if self.show_display:
@@ -491,6 +526,14 @@ def main():
         help="Process every Nth frame (default from settings). "
              "Use 3-5 for slow CPU devices to reduce processing time"
     )
+    parser.add_argument(
+        "--debug", type=str, default=None,
+        choices=["detection", "tracking", "ioa", "violation", "full"],
+        help="Enable debug visualization mode for thesis screenshots. "
+             "detection=raw YOLO output, tracking=ByteTrack IDs & trails, "
+             "ioa=spatial association with IoA%%, violation=N-frame confirm logic, "
+             "full=all stages combined"
+    )
     args = parser.parse_args()
 
     pipeline = SentinelPipeline(
@@ -499,6 +542,7 @@ def main():
         show_display=args.display,
         save_output=args.save_output,
         frame_stride=args.stride,
+        debug_mode=args.debug,
     )
     pipeline.run()
 
