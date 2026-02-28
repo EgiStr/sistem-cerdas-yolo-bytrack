@@ -9,13 +9,15 @@ Modes:
     2. "tracking"   – ByteTrack IDs, track trails, re-ID visualization
     3. "ioa"        – IoA spatial association: rider<>motorcycle overlap %
     4. "violation"  – N-frame confirmation logic: streak, patience, status
-    5. "full"       – Combined view of all stages (default)
+    5. "occlusion"  – ByteTrack occlusion handling: lost/tracked states, Kalman ghosts
+    6. "full"       – Combined view of all stages (default)
 
 Usage:
     uv run python -m src.pipeline.main --source video.mp4 --debug detection --no-kafka
     uv run python -m src.pipeline.main --source video.mp4 --debug tracking --no-kafka
     uv run python -m src.pipeline.main --source video.mp4 --debug ioa --no-kafka
     uv run python -m src.pipeline.main --source video.mp4 --debug violation --no-kafka
+    uv run python -m src.pipeline.main --source video.mp4 --debug occlusion --no-kafka
     uv run python -m src.pipeline.main --source video.mp4 --debug full --no-kafka
 """
 
@@ -44,6 +46,10 @@ CLR_CONFIRMED = (60, 60, 230)     # red    - confirmed violation
 CLR_STREAK = (0, 165, 255)        # orange - building streak
 CLR_SAFE = (80, 200, 80)          # green  - safe / helmet
 CLR_NO_ASSOC = (100, 160, 200)    # warm   - no motorcycle assoc
+CLR_LOST = (0, 200, 255)          # bright yellow - lost track (occluded)
+CLR_GHOST = (180, 130, 255)       # pink/magenta  - Kalman ghost prediction
+CLR_REMOVED = (100, 100, 100)     # dark grey     - removed track
+CLR_REID = (255, 200, 50)         # bright cyan   - re-ID event
 
 # Class ID -> colour
 CLASS_COLORS = {0: CLR_HELMET, 1: CLR_NO_HELMET, 2: CLR_MOTORCYCLE}
@@ -60,11 +66,16 @@ class DebugDisplay:
 
     def __init__(self, violation_checker=None):
         self.violation_checker = violation_checker
+        self.tracker = None  # set externally for occlusion mode
         self._track_trails: dict[int, list[tuple[int, int]]] = defaultdict(list)
         self._max_trail_length = 60
         self._frame_count = 0
         self._fps = 0.0
         self._total_violations = 0
+        # Occlusion debug state
+        self._prev_lost_ids: set[int] = set()   # lost IDs from previous frame
+        self._reid_events: dict[int, int] = {}  # track_id -> frame when re-IDed
+        self._reid_flash_frames = 30             # flash re-ID badge for N frames
 
     def set_stats(self, frame_count: int, fps: float, total_violations: int):
         """Update stats from the pipeline loop."""
@@ -531,7 +542,218 @@ class DebugDisplay:
         return out
 
     # ==================================================================
-    # MODE 5: FULL - Combined Debug View
+    # MODE 5: OCCLUSION - ByteTrack Internal State Visualization
+    # ==================================================================
+
+    def draw_occlusion(
+        self, frame: np.ndarray, tracked: sv.Detections, tracker_obj
+    ) -> np.ndarray:
+        """
+        ByteTrack occlusion handling debug:
+        - Active tracks (green solid box)
+        - Lost tracks (yellow dashed box with Kalman predicted position)
+        - Re-ID flash when a lost track becomes tracked again
+        - Track age, lost countdown bar, state labels
+        - Side panel with per-track state table
+        """
+        out = frame.copy()
+        h, w = out.shape[:2]
+
+        # Access ByteTrack internal lists
+        bt = tracker_obj.tracker  # the supervision.ByteTrack object
+        tracked_stracks = list(bt.tracked_tracks)   # active STrack list
+        lost_stracks = list(bt.lost_tracks)          # occluded/missing STrack list
+        removed_stracks = list(bt.removed_tracks)    # permanently removed
+
+        max_time_lost = bt.max_time_lost
+        current_frame = bt.frame_id
+
+        # --- Detect re-ID events ---
+        # IDs currently in tracked
+        current_tracked_ids = set()
+        for st in tracked_stracks:
+            eid = st.external_track_id
+            if eid is not None and hasattr(st, 'is_activated') and st.is_activated:
+                current_tracked_ids.add(eid)
+
+        current_lost_ids = set()
+        for st in lost_stracks:
+            eid = st.external_track_id
+            if eid is not None:
+                current_lost_ids.add(eid)
+
+        # Re-ID: was lost in previous frame, now tracked again
+        reided_ids = self._prev_lost_ids & current_tracked_ids
+        for rid in reided_ids:
+            self._reid_events[rid] = self._frame_count
+
+        self._prev_lost_ids = current_lost_ids.copy()
+
+        # --- Draw LOST tracks (Kalman ghost boxes - dashed) ---
+        lost_info_lines = []
+        for st in lost_stracks:
+            eid = st.external_track_id
+            if eid is None:
+                continue
+
+            # Kalman predicted position (tlbr)
+            box = st.tlbr.astype(int)
+            x1, y1, x2, y2 = box[0], box[1], box[2], box[3]
+
+            # Clamp to frame
+            x1 = max(0, x1)
+            y1 = max(0, y1)
+            x2 = min(w - 1, x2)
+            y2 = min(h - 1, y2)
+
+            if x2 <= x1 or y2 <= y1:
+                continue
+
+            # Dashed rectangle for lost track (Kalman prediction)
+            _draw_dashed_rect(out, x1, y1, x2, y2, CLR_LOST, thickness=2, gap=8)
+
+            # Translucent ghost fill
+            overlay = out.copy()
+            cv2.rectangle(overlay, (x1, y1), (x2, y2), CLR_GHOST, -1)
+            cv2.addWeighted(overlay, 0.12, out, 0.88, 0, out)
+
+            # Kalman cross at predicted center
+            cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+            cross_sz = 8
+            cv2.line(out, (cx - cross_sz, cy), (cx + cross_sz, cy), CLR_GHOST, 2, cv2.LINE_AA)
+            cv2.line(out, (cx, cy - cross_sz), (cx, cy + cross_sz), CLR_GHOST, 2, cv2.LINE_AA)
+
+            # Lost duration
+            frames_lost = current_frame - st.frame_id
+            remaining = max(0, max_time_lost - frames_lost)
+
+            # Label
+            _draw_pill(out, f"#{eid} LOST", x1, y1 - 4, CLR_LOST, font_scale=0.38, bold=True)
+            _draw_pill(out, f"Kalman ghost | TTL:{remaining}F", x1, y1 - 24, CLR_GHOST, font_scale=0.32)
+
+            # Countdown bar below box
+            bar_w = max(x2 - x1, 50)
+            bar_h = 6
+            bar_y = y2 + 4
+            cv2.rectangle(out, (x1, bar_y), (x1 + bar_w, bar_y + bar_h), CLR_GREY, 1)
+            progress = remaining / max_time_lost if max_time_lost > 0 else 0
+            fill_w = int(bar_w * progress)
+            bar_color = CLR_LOST if progress > 0.3 else CLR_REMOVED
+            cv2.rectangle(out, (x1, bar_y), (x1 + fill_w, bar_y + bar_h), bar_color, -1)
+
+            # Collect info
+            age = st.frame_id - st.start_frame
+            lost_info_lines.append(
+                f"#{eid} LOST age={age}F lost={frames_lost}F ttl={remaining}"
+            )
+
+        # --- Draw ACTIVE tracked objects ---
+        active_info_lines = []
+        if len(tracked) > 0 and tracked.tracker_id is not None:
+            class_ids = tracked.class_id
+            xyxy = tracked.xyxy
+            tracker_ids = tracked.tracker_id
+            confidences = tracked.confidence
+            class_names = tracked.data.get("class_name", [None] * len(tracked))
+
+            for i in range(len(tracked)):
+                x1, y1, x2, y2 = xyxy[i].astype(int)
+                cid = int(class_ids[i])
+                conf = float(confidences[i])
+                tid = int(tracker_ids[i]) if tracker_ids[i] is not None else None
+                cls_name = class_names[i] if class_names[i] is not None else CLASS_LABELS.get(cid, "?")
+                color = CLASS_COLORS.get(cid, CLR_GREY)
+
+                # Update trails
+                cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+                if tid is not None:
+                    self._track_trails[tid].append((cx, cy))
+                    if len(self._track_trails[tid]) > self._max_trail_length:
+                        self._track_trails[tid].pop(0)
+
+                # Draw trail
+                if tid is not None and tid in self._track_trails:
+                    trail = self._track_trails[tid]
+                    for j in range(1, len(trail)):
+                        alpha = j / len(trail)
+                        t_color = tuple(int(c * alpha) for c in CLR_CYAN)
+                        cv2.line(out, trail[j - 1], trail[j], t_color, max(1, int(2 * alpha)), cv2.LINE_AA)
+
+                # Box
+                cv2.rectangle(out, (x1, y1), (x2, y2), color, 2)
+                cv2.circle(out, (cx, cy), 4, CLR_CYAN, -1)
+
+                # Labels
+                id_str = f"#{tid} " if tid is not None else ""
+                _draw_pill(out, f"{id_str}{cls_name} {conf:.0%}", x1, y1 - 4, color, font_scale=0.38)
+                _draw_pill(out, "TRACKED", x1, y1 - 24, CLR_SAFE, font_scale=0.32)
+
+                # Check if this is a recent re-ID
+                if tid is not None and tid in self._reid_events:
+                    elapsed = self._frame_count - self._reid_events[tid]
+                    if elapsed < self._reid_flash_frames:
+                        # Flash re-ID badge
+                        _draw_pill(out, "RE-ID!", x2 - 50, y1 - 24, CLR_REID, font_scale=0.38, bold=True)
+                        # Highlight box with accent corners
+                        _draw_corner_accents(out, x1, y1, x2, y2, CLR_REID)
+                    else:
+                        del self._reid_events[tid]
+
+                # Find matching STrack for age info
+                strack_age = None
+                for st in tracked_stracks:
+                    if st.external_track_id == tid:
+                        strack_age = st.frame_id - st.start_frame
+                        break
+
+                if tid is not None:
+                    age_str = f"age={strack_age}F" if strack_age is not None else ""
+                    active_info_lines.append(f"#{tid} {cls_name} {conf:.0%} {age_str}")
+
+        # --- Header ---
+        subtitle = (
+            f"F:{self._frame_count} | "
+            f"Active: {len(tracked_stracks)} | "
+            f"Lost: {len(lost_stracks)} | "
+            f"Removed: {len(removed_stracks)} | "
+            f"MaxTTL: {max_time_lost}F"
+        )
+        self._draw_header(out, "OCCLUSION (ByteTrack State)", subtitle)
+
+        # --- Side panel ---
+        panel_lines = [
+            f"ByteTrack Frame: {current_frame}",
+            f"Max Time Lost: {max_time_lost}F",
+            f"Re-ID Events: {len(self._reid_events)}",
+            "---",
+            "ACTIVE TRACKS:",
+        ]
+        if active_info_lines:
+            panel_lines.extend(active_info_lines)
+        else:
+            panel_lines.append("  (none)")
+        panel_lines.append("---")
+        panel_lines.append("LOST TRACKS (Kalman):")
+        if lost_info_lines:
+            panel_lines.extend(lost_info_lines)
+        else:
+            panel_lines.append("  (none)")
+
+        self._draw_info_panel(out, panel_lines, x=w - 310, y=55)
+
+        # Legend
+        self._draw_legend(out, [
+            ("Green = Active", CLR_SAFE),
+            ("Yellow = Lost (occluded)", CLR_LOST),
+            ("Pink = Kalman ghost", CLR_GHOST),
+            ("Cyan = Re-ID event", CLR_REID),
+            ("Grey = Removed", CLR_REMOVED),
+        ], h)
+
+        return out
+
+    # ==================================================================
+    # MODE 6: FULL - Combined Debug View
     # ==================================================================
 
     def draw_full(
@@ -822,3 +1044,39 @@ def _draw_corner_accents(
     ]:
         cv2.line(img, (cx, cy), (cx + dx * accent_len, cy), color, 3)
         cv2.line(img, (cx, cy), (cx, cy + dy * accent_len), color, 3)
+
+
+def _draw_dashed_rect(
+    img: np.ndarray,
+    x1: int, y1: int, x2: int, y2: int,
+    color: tuple,
+    thickness: int = 2,
+    gap: int = 8,
+):
+    """Draw a dashed rectangle (for lost / predicted tracks)."""
+    edges = [
+        ((x1, y1), (x2, y1)),  # top
+        ((x2, y1), (x2, y2)),  # right
+        ((x2, y2), (x1, y2)),  # bottom
+        ((x1, y2), (x1, y1)),  # left
+    ]
+    for (sx, sy), (ex, ey) in edges:
+        dx = ex - sx
+        dy = ey - sy
+        length = max(abs(dx), abs(dy))
+        if length == 0:
+            continue
+        ndx = dx / length
+        ndy = dy / length
+        pos = 0
+        draw = True
+        while pos < length:
+            seg = min(gap, length - pos)
+            px1 = int(sx + ndx * pos)
+            py1 = int(sy + ndy * pos)
+            px2 = int(sx + ndx * (pos + seg))
+            py2 = int(sy + ndy * (pos + seg))
+            if draw:
+                cv2.line(img, (px1, py1), (px2, py2), color, thickness, cv2.LINE_AA)
+            pos += gap
+            draw = not draw

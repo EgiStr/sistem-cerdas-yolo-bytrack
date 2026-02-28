@@ -24,6 +24,7 @@ from src.detector.tracker import ObjectTracker
 from src.detector.violation import ViolationDetector
 from src.streaming.producer import ViolationProducer
 from src.pipeline.debug_display import DebugDisplay
+from src.evaluation.mot_exporter import MOTExporter
 
 
 class SentinelPipeline:
@@ -35,7 +36,7 @@ class SentinelPipeline:
     """
 
     # Valid debug modes
-    DEBUG_MODES = ("detection", "tracking", "ioa", "violation", "full")
+    DEBUG_MODES = ("detection", "tracking", "ioa", "violation", "occlusion", "full")
 
     def __init__(
         self,
@@ -45,6 +46,7 @@ class SentinelPipeline:
         save_output: str | None = None,
         frame_stride: int | None = None,
         debug_mode: str | None = None,
+        export_mot: str | None = None,
     ):
         self.video_source = video_source or settings.video_source
         self.enable_kafka = enable_kafka
@@ -52,6 +54,7 @@ class SentinelPipeline:
         self.save_output = save_output
         self.frame_stride = frame_stride or settings.pipeline_frame_stride
         self.debug_mode = debug_mode
+        self.export_mot = export_mot
 
         # Initialize components
         logger.info("=" * 60)
@@ -84,6 +87,13 @@ class SentinelPipeline:
         # Annotators for visualization
         self.box_annotator = sv.BoxAnnotator(thickness=2)
         self.label_annotator = sv.LabelAnnotator(text_scale=0.5, text_thickness=1)
+
+        # MOT exporter (optional)
+        self.mot_exporter: MOTExporter | None = None
+        if self.export_mot:
+            self.mot_exporter = MOTExporter(self.export_mot)
+            self.mot_exporter.enable_frame_save(True)
+            logger.info(f"MOT export enabled -> {self.export_mot}")
 
         # Stats
         self._frame_count = 0
@@ -372,6 +382,16 @@ class SentinelPipeline:
         tracker_fps = settings.tracker_frame_rate or effective_fps
         self.tracker = ObjectTracker(frame_rate=tracker_fps)
 
+        # Give debug display access to tracker for occlusion mode
+        if self.debug_display:
+            self.debug_display.tracker = self.tracker
+
+        # Set MOT exporter video info
+        if self.mot_exporter:
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            self.mot_exporter.set_video_info(width, height, float(video_fps))
+
         if stride > 1:
             logger.info(
                 f"⚡ Frame stride={stride}: processing 1/{stride} frames "
@@ -410,6 +430,12 @@ class SentinelPipeline:
                 # Step 2: Track
                 tracked = self.tracker.update(detections)
 
+                # Step 2.5: Record MOT data (if exporting)
+                if self.mot_exporter:
+                    self.mot_exporter.record_frame(
+                        self._frame_count, frame, detections, tracked
+                    )
+
                 # Step 3: Check violations
                 violations = self.violation_checker.check(
                     tracked, self._frame_count
@@ -445,6 +471,8 @@ class SentinelPipeline:
                             annotated = self.debug_display.draw_ioa(frame, tracked)
                         elif self.debug_mode == "violation":
                             annotated = self.debug_display.draw_violation(frame, tracked)
+                        elif self.debug_mode == "occlusion":
+                            annotated = self.debug_display.draw_occlusion(frame, tracked, self.tracker)
                         elif self.debug_mode == "full":
                             annotated = self.debug_display.draw_full(frame, detections, tracked)
                         else:
@@ -482,6 +510,11 @@ class SentinelPipeline:
                 cv2.destroyAllWindows()
             if self.producer:
                 self.producer.close()
+
+            # Save MOT export data
+            if self.mot_exporter:
+                self.mot_exporter.save()
+                logger.info(f"MOT data exported: {self.mot_exporter.stats}")
 
             self._print_summary()
 
@@ -528,11 +561,18 @@ def main():
     )
     parser.add_argument(
         "--debug", type=str, default=None,
-        choices=["detection", "tracking", "ioa", "violation", "full"],
+        choices=["detection", "tracking", "ioa", "violation", "occlusion", "full"],
         help="Enable debug visualization mode for thesis screenshots. "
              "detection=raw YOLO output, tracking=ByteTrack IDs & trails, "
              "ioa=spatial association with IoA%%, violation=N-frame confirm logic, "
+             "occlusion=ByteTrack lost/tracked states & Kalman ghosts, "
              "full=all stages combined"
+    )
+    parser.add_argument(
+        "--export-mot", type=str, default=None,
+        help="Export tracking results in MOT Challenge format to this directory. "
+             "Creates pred.txt, det.txt, gt.txt (empty), seqinfo.ini, and frames/. "
+             "Use for MOTA evaluation: uv run python -m src.evaluation.evaluate_mot --mot-dir <dir>"
     )
     args = parser.parse_args()
 
@@ -543,6 +583,7 @@ def main():
         save_output=args.save_output,
         frame_stride=args.stride,
         debug_mode=args.debug,
+        export_mot=args.export_mot,
     )
     pipeline.run()
 
