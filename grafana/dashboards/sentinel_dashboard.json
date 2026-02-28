@@ -1,5 +1,7 @@
 {
-  "annotations": { "list": [] },
+  "annotations": {
+    "list": []
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -9,36 +11,68 @@
   "panels": [
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
       "id": 100,
       "title": "📊 KPI Overview",
       "type": "row"
     },
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sentinel-postgres"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 10 },
-              { "color": "red", "value": 50 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
             ]
           }
         }
       },
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
       "id": 1,
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^violations_today$/" },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^violations_today$/"
+        },
         "orientation": "auto",
         "textMode": "auto",
         "colorMode": "background"
       },
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sentinel-postgres"
+          },
           "rawSql": "SELECT * FROM vw_kpi_summary;",
           "format": "table",
           "refId": "A"
@@ -48,29 +82,56 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sentinel-postgres"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "unit": "percentunit",
           "thresholds": {
             "steps": [
-              { "color": "red", "value": null },
-              { "color": "yellow", "value": 0.7 },
-              { "color": "green", "value": 0.9 }
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.7
+              },
+              {
+                "color": "green",
+                "value": 0.9
+              }
             ]
           }
         }
       },
-      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
       "id": 2,
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^avg_confidence$/" },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^avg_confidence$/"
+        },
         "colorMode": "background"
       },
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sentinel-postgres"
+          },
           "rawSql": "SELECT * FROM vw_kpi_summary;",
           "format": "table",
           "refId": "A"
@@ -80,29 +141,56 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sentinel-postgres"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "unit": "ms",
           "thresholds": {
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 500 },
-              { "color": "red", "value": 1000 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 500
+              },
+              {
+                "color": "red",
+                "value": 1000
+              }
             ]
           }
         }
       },
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
       "id": 3,
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^avg_latency_ms$/" },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^avg_latency_ms$/"
+        },
         "colorMode": "background"
       },
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sentinel-postgres"
+          },
           "rawSql": "SELECT * FROM vw_kpi_summary;",
           "format": "table",
           "refId": "A"
@@ -112,26 +200,47 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sentinel-postgres"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "steps": [
-              { "color": "blue", "value": null }
+              {
+                "color": "blue",
+                "value": null
+              }
             ]
           }
         }
       },
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
       "id": 4,
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^total_violations_alltime$/" },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^total_violations_alltime$/"
+        },
         "colorMode": "background"
       },
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sentinel-postgres"
+          },
           "rawSql": "SELECT * FROM vw_kpi_summary;",
           "format": "table",
           "refId": "A"
@@ -142,16 +251,26 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
       "id": 101,
       "title": "📈 Tren & Distribusi",
       "type": "row"
     },
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sentinel-postgres"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "lineWidth": 2,
             "fillOpacity": 20,
@@ -160,14 +279,24 @@
           }
         }
       },
-      "gridPos": { "h": 8, "w": 16, "x": 0, "y": 6 },
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 0,
+        "y": 6
+      },
       "id": 5,
       "options": {
-        "tooltip": { "mode": "multi" }
+        "tooltip": {
+          "mode": "multi"
+        }
       },
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sentinel-postgres"
+          },
           "rawSql": "SELECT * FROM vw_daily_trend;",
           "format": "time_series",
           "refId": "A"
@@ -177,14 +306,26 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sentinel-postgres"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "fillOpacity": 80 }
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80
+          }
         }
       },
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 6 },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 6
+      },
       "id": 6,
       "options": {
         "orientation": "horizontal",
@@ -193,7 +334,10 @@
       },
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sentinel-postgres"
+          },
           "rawSql": "SELECT * FROM vw_camera_stats;",
           "format": "table",
           "refId": "A"
@@ -204,24 +348,52 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
       "id": 102,
-      "title": "🔥 Heatmap & Pola",
+      "title": "📅 Pola Pelanggaran",
       "type": "row"
     },
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sentinel-postgres"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "steps": [
-              { "color": "#1a1a2e", "value": null },
-              { "color": "#2d6a4f", "value": 1 },
-              { "color": "#74c69d", "value": 5 },
-              { "color": "#f9c74f", "value": 10 },
-              { "color": "#f8961e", "value": 20 },
-              { "color": "#e63946", "value": 30 }
+              {
+                "color": "#1a1a2e",
+                "value": null
+              },
+              {
+                "color": "#2d6a4f",
+                "value": 1
+              },
+              {
+                "color": "#74c69d",
+                "value": 5
+              },
+              {
+                "color": "#f9c74f",
+                "value": 10
+              },
+              {
+                "color": "#f8961e",
+                "value": 20
+              },
+              {
+                "color": "#e63946",
+                "value": 30
+              }
             ]
           },
           "custom": {
@@ -235,83 +407,850 @@
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "Jam" },
+            "matcher": {
+              "id": "byName",
+              "options": "Jam"
+            },
             "properties": [
-              { "id": "custom.width", "value": 50 },
-              { "id": "custom.cellOptions", "value": { "type": "auto" } },
-              { "id": "custom.align", "value": "center" }
+              {
+                "id": "custom.width",
+                "value": 50
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "auto"
+                }
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
             ]
           }
         ]
       },
-      "gridPos": { "h": 12, "w": 12, "x": 0, "y": 15 },
-      "id": 7,
+      "gridPos": {
+        "h": 10,
+        "w": 16,
+        "x": 0,
+        "y": 15
+      },
+      "id": 11,
       "options": {
         "showHeader": true,
         "cellHeight": "sm",
-        "footer": { "show": false },
-        "sortBy": [{ "displayName": "Jam", "desc": false }]
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Jam",
+            "desc": false
+          }
+        ]
       },
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sentinel-postgres"
+          },
           "rawSql": "SELECT * FROM vw_heatmap_hour_day;",
           "format": "table",
           "refId": "A"
         }
       ],
-      "title": "🔥 Heatmap: Jam × Hari",
+      "title": "📅 Grid: Jam × Hari",
+      "description": "Heatmap tabular: baris = jam (0-23), kolom = hari. Warna makin merah = makin banyak pelanggaran. Identifikasi pola waktu rawan.",
       "type": "table"
     },
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sentinel-postgres"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" }
+          "color": {
+            "mode": "palette-classic"
+          }
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+      "gridPos": {
+        "h": 10,
+        "w": 8,
+        "x": 16,
+        "y": 15
+      },
       "id": 8,
       "options": {
         "reduceOptions": {
-          "calcs": ["lastNotNull"]
+          "calcs": [
+            "lastNotNull"
+          ]
         },
         "pieType": "donut",
-        "tooltip": { "mode": "multi" },
+        "tooltip": {
+          "mode": "multi"
+        },
         "legend": {
           "displayMode": "table",
-          "placement": "right",
-          "values": ["value", "percent"]
-        }
+          "placement": "bottom",
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "displayLabels": [
+          "name",
+          "percent"
+        ]
       },
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sentinel-postgres"
+          },
           "rawSql": "SELECT * FROM vw_time_period_distribution;",
           "format": "table",
           "refId": "A"
         }
       ],
-      "title": "🕐 Distribusi per Waktu (Pagi/Siang/Sore/Malam)",
+      "title": "🕐 Distribusi Waktu",
+      "description": "Proporsi pelanggaran berdasarkan periode: Pagi (06-11), Siang (11-15), Sore (15-18), Malam (18-06).",
       "type": "piechart"
     },
     {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sentinel-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "super-light-blue",
+                "value": null
+              },
+              {
+                "color": "light-blue",
+                "value": 5
+              },
+              {
+                "color": "blue",
+                "value": 20
+              },
+              {
+                "color": "semi-dark-blue",
+                "value": 50
+              },
+              {
+                "color": "dark-red",
+                "value": 200
+              }
+            ]
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "scheme"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 0,
+        "y": 25
+      },
+      "id": 14,
+      "options": {
+        "orientation": "vertical",
+        "xTickLabelRotation": 0,
+        "showValue": "auto",
+        "barWidth": 0.8,
+        "groupWidth": 0.7,
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sentinel-postgres"
+          },
+          "rawSql": "SELECT \"Jam\", \"Pelanggaran\" FROM vw_hourly_bar;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "title": "📊 Pelanggaran per Jam (0-23)",
+      "description": "Distribusi jumlah pelanggaran per jam dengan overlay confidence. Identifikasi jam puncak untuk penempatan petugas keamanan.",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sentinel-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 25
+      },
+      "id": 15,
+      "options": {
+        "orientation": "horizontal",
+        "xTickLabelRotation": 0,
+        "showValue": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sentinel-postgres"
+          },
+          "rawSql": "SELECT * FROM vw_confidence_distribution;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "title": "🎯 Distribusi Confidence Model",
+      "description": "Histogram confidence score YOLOv8. Semakin ke kanan = model semakin yakin. Evaluasi kualitas deteksi.",
+      "type": "barchart"
+    },
+    {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 33
+      },
+      "id": 104,
+      "title": "🎯 Analisis Tipe & Lokasi",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sentinel-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 8,
+        "x": 0,
+        "y": 34
+      },
+      "id": 12,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "pieType": "donut",
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "displayLabels": [
+          "name",
+          "percent"
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sentinel-postgres"
+          },
+          "rawSql": "SELECT * FROM vw_violation_type_distribution;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "title": "⚠️ Distribusi Tipe Pelanggaran",
+      "description": "Proporsi pelanggaran per tipe dari dim_violation_type. Format pivoted sama seperti distribusi waktu.",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sentinel-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {}
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 16,
+        "x": 8,
+        "y": 34
+      },
+      "id": 10,
+      "options": {
+        "view": {
+          "id": "coords",
+          "lat": -5.359,
+          "lon": 105.316,
+          "zoom": 16
+        },
+        "basemap": {
+          "config": {},
+          "name": "Layer 0",
+          "type": "default"
+        },
+        "layers": [
+          {
+            "config": {
+              "showLegend": true,
+              "style": {
+                "color": {
+                  "field": "total_violations",
+                  "fixed": "dark-red"
+                },
+                "opacity": 0.8,
+                "rotation": {
+                  "fixed": 0,
+                  "max": 360,
+                  "min": -360,
+                  "mode": "fixed"
+                },
+                "size": {
+                  "field": "total_violations",
+                  "fixed": 10,
+                  "max": 30,
+                  "min": 8
+                },
+                "symbol": {
+                  "fixed": "img/icons/marker/circle.svg",
+                  "mode": "fixed"
+                },
+                "symbolAlign": {
+                  "horizontal": "center",
+                  "vertical": "center"
+                },
+                "text": {
+                  "field": "camera_name",
+                  "fixed": "",
+                  "mode": "field"
+                },
+                "textConfig": {
+                  "fontSize": 12,
+                  "offsetX": 0,
+                  "offsetY": -18,
+                  "textAlign": "center",
+                  "textBaseline": "bottom"
+                }
+              }
+            },
+            "location": {
+              "latitude": "latitude",
+              "longitude": "longitude",
+              "mode": "coords"
+            },
+            "name": "Kamera ITERA",
+            "tooltip": true,
+            "type": "markers"
+          }
+        ],
+        "controls": {
+          "mouseWheelZoom": true,
+          "showAttribution": true,
+          "showDebug": false,
+          "showMeasure": false,
+          "showScale": true,
+          "showZoom": true
+        },
+        "tooltip": {
+          "mode": "details"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sentinel-postgres"
+          },
+          "rawSql": "SELECT * FROM vw_camera_geomap;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "title": "🗺️ Peta Lokasi Kamera ITERA",
+      "description": "Marker size = jumlah pelanggaran. Tooltip: risk level, jam puncak, periode dominan.",
+      "type": "geomap"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sentinel-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              }
+            ]
+          },
+          "custom": {
+            "align": "center",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Jumlah"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 100
+                    },
+                    {
+                      "color": "red",
+                      "value": 300
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Severity"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "Tinggi": {
+                        "color": "red",
+                        "index": 0,
+                        "text": "🔴 Tinggi"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "Sedang": {
+                        "color": "orange",
+                        "index": 1,
+                        "text": "🟡 Sedang"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "Rendah": {
+                        "color": "green",
+                        "index": 2,
+                        "text": "🟢 Rendah"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Avg Confidence"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Avg Latency (ms)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 44
+      },
+      "id": 16,
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Jumlah",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sentinel-postgres"
+          },
+          "rawSql": "SELECT * FROM vw_violation_type_detail;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "title": "📋 Detail Tipe Pelanggaran",
+      "description": "Detail per tipe: severity, jumlah, persentase, confidence, latency.",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sentinel-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
+            ]
+          },
+          "custom": {
+            "align": "center",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "risk_level"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "Tinggi": {
+                        "color": "red",
+                        "index": 0,
+                        "text": "🔴 Tinggi"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "Sedang": {
+                        "color": "orange",
+                        "index": 1,
+                        "text": "🟡 Sedang"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "Rendah": {
+                        "color": "yellow",
+                        "index": 2,
+                        "text": "🟢 Rendah"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "Aman": {
+                        "color": "green",
+                        "index": 3,
+                        "text": "✅ Aman"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "total_violations"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "avg_confidence"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "avg_latency_ms"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 16,
+        "x": 8,
+        "y": 44
+      },
+      "id": 13,
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "total_violations",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "latitude": true,
+              "longitude": true,
+              "camera_id": true
+            },
+            "renameByName": {
+              "camera_name": "Kamera",
+              "location_description": "Lokasi",
+              "total_violations": "Total Pelanggaran",
+              "avg_confidence": "Avg Confidence",
+              "avg_latency_ms": "Avg Latency",
+              "risk_level": "Risk Level",
+              "peak_hour": "Jam Puncak",
+              "peak_period": "Periode Puncak",
+              "last_violation": "Pelanggaran Terakhir"
+            },
+            "indexByName": {
+              "camera_name": 0,
+              "location_description": 1,
+              "total_violations": 2,
+              "risk_level": 3,
+              "peak_hour": 4,
+              "peak_period": 5,
+              "avg_confidence": 6,
+              "avg_latency_ms": 7,
+              "last_violation": 8
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sentinel-postgres"
+          },
+          "rawSql": "SELECT * FROM vw_camera_geomap;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "title": "📊 Detail Kamera — Risk Analysis",
+      "description": "Analisis risiko per kamera: total pelanggaran, jam puncak, periode dominan, level risiko otomatis.",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 50
+      },
       "id": 103,
       "title": "📋 Log Detail",
       "type": "row"
     },
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sentinel-postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 51
+      },
       "id": 9,
       "options": {
         "showHeader": true,
-        "sortBy": [{ "displayName": "Waktu", "desc": true }],
+        "sortBy": [
+          {
+            "displayName": "Waktu",
+            "desc": true
+          }
+        ],
         "footer": {
           "show": true,
-          "reducer": ["count"],
+          "reducer": [
+            "count"
+          ],
           "countRows": true
         }
       },
@@ -319,24 +1258,45 @@
         "defaults": {},
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "Confidence" },
+            "matcher": {
+              "id": "byName",
+              "options": "Confidence"
+            },
             "properties": [
-              { "id": "custom.width", "value": 100 },
-              { "id": "decimals", "value": 3 }
+              {
+                "id": "custom.width",
+                "value": 100
+              },
+              {
+                "id": "decimals",
+                "value": 3
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "Latency (ms)" },
+            "matcher": {
+              "id": "byName",
+              "options": "Latency (ms)"
+            },
             "properties": [
-              { "id": "custom.width", "value": 110 },
-              { "id": "decimals", "value": 1 }
+              {
+                "id": "custom.width",
+                "value": 110
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
             ]
           }
         ]
       },
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "sentinel-postgres" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sentinel-postgres"
+          },
           "rawSql": "SELECT * FROM vw_recent_violations;",
           "format": "table",
           "refId": "A"
@@ -348,13 +1308,22 @@
   ],
   "refresh": "10s",
   "schemaVersion": 39,
-  "tags": ["sentinel", "itera", "safety"],
-  "templating": { "list": [] },
-  "time": { "from": "now-7d", "to": "now" },
+  "tags": [
+    "sentinel",
+    "itera",
+    "safety"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
   "timepicker": {},
   "timezone": "Asia/Jakarta",
   "title": "ITERA Smart Sentinel - Safety Dashboard",
   "uid": "sentinel-main",
-  "version": 1,
+  "version": 2,
   "weekStart": "monday"
 }

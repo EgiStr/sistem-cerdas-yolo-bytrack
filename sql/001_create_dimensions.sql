@@ -46,11 +46,11 @@ CREATE TABLE IF NOT EXISTS dim_violation_type (
 -- Seed default data
 -- ============================================
 
-INSERT INTO dim_camera (camera_id, camera_name, location_description)
+INSERT INTO dim_camera (camera_id, camera_name, location_description, gps_latitude, gps_longitude)
 VALUES
-    ('gate_utama_01', 'Kamera Gerbang Utama 1', 'Jalan Terusan Ryacudu, Gerbang Utama ITERA'),
-    ('gate_utama_02', 'Kamera Gerbang Utama 2', 'Jalan Terusan Ryacudu, Gerbang Utama ITERA'),
-    ('gate_belakang_01', 'Kamera Gerbang Belakang', 'Gerbang Belakang ITERA')
+    ('gate_utama_01', 'Kamera Gerbang Utama 1', 'Jalan Terusan Ryacudu, Gerbang Utama ITERA', -5.35783000, 105.31446000),
+    ('gate_utama_02', 'Kamera Gerbang Utama 2', 'Jalan Terusan Ryacudu, Gerbang Utama ITERA', -5.35795000, 105.31465000),
+    ('gate_belakang_01', 'Kamera Gerbang Belakang', 'Gerbang Belakang ITERA',                -5.36170000, 105.31800000)
 ON CONFLICT (camera_id) DO NOTHING;
 
 INSERT INTO dim_violation_type (type_code, type_name, description, severity_level)
