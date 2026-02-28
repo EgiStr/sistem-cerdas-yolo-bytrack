@@ -134,7 +134,7 @@ Capaian mAP@50 sebesar 90,0\% secara signifikan melampaui target minimal penelit
 \label{subsec:distribusi-deteksi}
 % ------------------------------------------------------------
 
-Validasi model pada skenario operasional dilakukan melalui pengujian \textit{benchmark} pada video uji berdurasi 3.000 \textit{frame} (resolusi $1280 \times 720$, 25 FPS). Hasil distribusi deteksi per kelas yang tercatat selama \textit{benchmark} disajikan pada Tabel~\ref{tab:distribusi-deteksi}. Model mendeteksi total 9.375 objek dengan rerata 3,12 objek per \textit{frame}, terdiri dari 4.059 deteksi \texttt{DRIVER\_HELMET} (1,35/\textit{frame}), 1.494 deteksi \texttt{DRIVER\_NO\_HELMET} (0,50/\textit{frame}), dan 3.822 deteksi \texttt{MOTORCYCLE} (1,27/\textit{frame}).
+Validasi model pada skenario operasional dilakukan melalui pengujian \textit{benchmark} pada video uji berdurasi 3.000 \textit{frame} (resolusi $1280 \times 720$, 25 FPS) dengan \textit{confidence threshold} 0,25 dan IoU \textit{threshold} 0,7. Hasil distribusi deteksi per kelas yang tercatat selama \textit{benchmark} disajikan pada Tabel~\ref{tab:distribusi-deteksi}. Model mendeteksi total 11.167 objek dengan rerata 3,72 objek per \textit{frame}, terdiri dari 4.399 deteksi \texttt{DRIVER\_HELMET} (1,47/\textit{frame}), 1.711 deteksi \texttt{DRIVER\_NO\_HELMET} (0,57/\textit{frame}), dan 5.057 deteksi \texttt{MOTORCYCLE} (1,69/\textit{frame}).
 
 \begin{table}[htbp]
 \centering
@@ -144,16 +144,16 @@ Validasi model pada skenario operasional dilakukan melalui pengujian \textit{ben
 \hline
 \textbf{Kelas} & \textbf{Total Deteksi} & \textbf{Rata-rata per \textit{Frame}} \\
 \hline
-\texttt{DRIVER\_HELMET}     & 4.059 & 1,35 \\
-\texttt{DRIVER\_NO\_HELMET} & 1.494 & 0,50 \\
-\texttt{MOTORCYCLE}         & 3.822 & 1,27 \\
+\texttt{DRIVER\_HELMET}     & 4.399 & 1,47 \\
+\texttt{DRIVER\_NO\_HELMET} & 1.711 & 0,57 \\
+\texttt{MOTORCYCLE}         & 5.057 & 1,69 \\
 \hline
-\textbf{Total}              & 9.375 & 3,12 \\
+\textbf{Total}              & 11.167 & 3,72 \\
 \hline
 \end{tabular}
 \end{table}
 
-Rasio antara kelas \texttt{DRIVER\_HELMET} dan \texttt{DRIVER\_NO\_HELMET} sebesar 2,72:1 mengindikasikan bahwa mayoritas pengendara pada lokasi uji telah mematuhi kewajiban penggunaan helm. Meskipun demikian, proporsi pelanggaran yang mencapai 26,9\% dari total deteksi pengendara merupakan angka yang cukup signifikan dan memperkuat justifikasi kebutuhan akan sistem pemantauan otomatis berbasis \textit{computer vision} \cite{jia2021real}. Rerata 3,12 objek per \textit{frame} merepresentasikan kepadatan lalu lintas sedang yang konsisten dengan karakteristik gerbang kampus, suatu kondisi yang relatif \textit{favorable} bagi model deteksi karena meminimalkan oklusi antar-objek. Dalam konteks perbandingan dengan studi sejenis pada lingkungan lalu lintas perkotaan yang lebih padat \cite{kumar2021helmet}, tingkat deteksi per \textit{frame} pada penelitian ini tergolong moderat dan memungkinkan pelacakan objek yang lebih stabil.
+Rasio antara kelas \texttt{DRIVER\_HELMET} dan \texttt{DRIVER\_NO\_HELMET} sebesar 2,57:1 mengindikasikan bahwa mayoritas pengendara pada lokasi uji telah mematuhi kewajiban penggunaan helm. Meskipun demikian, proporsi pelanggaran yang mencapai 28,0\% dari total deteksi pengendara merupakan angka yang cukup signifikan dan memperkuat justifikasi kebutuhan akan sistem pemantauan otomatis berbasis \textit{computer vision} \cite{jia2021real}. Penggunaan \textit{confidence threshold} operasional yang lebih rendah (0,25) dibandingkan ambang pelatihan (0,5) dirancang untuk mengakomodasi deteksi berkonfidensialitas rendah yang diperlukan oleh mekanisme asosiasi dua tahap ByteTrack \cite{zhang2022bytetrack}, sehingga \textit{track} yang sempat terdeteksi dengan konfidensialitas rendah tetap dapat diasosiasikan dan dilacak secara persisten. Rerata 3,72 objek per \textit{frame} merepresentasikan kepadatan lalu lintas sedang yang konsisten dengan karakteristik gerbang kampus, suatu kondisi yang relatif \textit{favorable} bagi model deteksi karena meminimalkan oklusi antar-objek. Dalam konteks perbandingan dengan studi sejenis pada lingkungan lalu lintas perkotaan yang lebih padat \cite{kumar2021helmet}, tingkat deteksi per \textit{frame} pada penelitian ini tergolong moderat dan memungkinkan pelacakan objek yang lebih stabil.
 
 % ------------------------------------------------------------
 \subsection{Analisis Kesalahan dan Keterbatasan Deteksi}
@@ -202,7 +202,7 @@ Keputusan desain \textit{single-process} dengan format intermediasi \texttt{supe
 \label{subsec:stabilitas-tracking}
 % ------------------------------------------------------------
 
-Evaluasi stabilitas pelacakan ByteTrack pada video uji 3.000 \textit{frame} menghasilkan 135 identitas unik (\textit{track ID}) yang distingtif, dengan rerata 3,05 objek aktif per \textit{frame} dan kapasitas maksimal 11 objek simultan, sebagaimana dirangkum pada Tabel~\ref{tab:statistik-tracking}. Konfigurasi pelacakan menggunakan \textit{track activation threshold} 0,25, \textit{minimum matching threshold} 0,8, dan \textit{lost track buffer} 60 \textit{frame}. Visualisasi hasil pelacakan dengan identitas persisten dan asosiasi spasial \textit{rider}--\textit{motorcycle} ditampilkan pada Gambar~\ref{fig:tracking-vis}.
+Evaluasi stabilitas pelacakan ByteTrack pada video uji 3.000 \textit{frame} menghasilkan 134 identitas unik (\textit{track ID}) yang distingtif, dengan rerata 3,37 objek aktif per \textit{frame} dan kapasitas maksimal 11 objek simultan, sebagaimana dirangkum pada Tabel~\ref{tab:statistik-tracking}. Konfigurasi pelacakan menggunakan \textit{track activation threshold} 0,4, \textit{minimum matching threshold} 0,85, dan \textit{lost track buffer} 120 \textit{frame}. Visualisasi hasil pelacakan dengan identitas persisten dan asosiasi spasial \textit{rider}--\textit{motorcycle} ditampilkan pada Gambar~\ref{fig:tracking-vis}.
 
 \begin{table}[htbp]
 \centering
@@ -212,12 +212,12 @@ Evaluasi stabilitas pelacakan ByteTrack pada video uji 3.000 \textit{frame} meng
 \hline
 \textbf{Metrik} & \textbf{Nilai} \\
 \hline
-Total \textit{track ID} unik            & 135 \\
-Rata-rata objek aktif per \textit{frame} & 3,05 \\
+Total \textit{track ID} unik            & 134 \\
+Rata-rata objek aktif per \textit{frame} & 3,37 \\
 Maksimum objek simultan                  & 11 \\
-\textit{Lost track buffer}              & 60 \textit{frame} ($\approx$4 detik) \\
-\textit{Minimum matching threshold}      & 0,8 \\
-\textit{Track activation threshold}      & 0,25 \\
+\textit{Lost track buffer}              & 120 \textit{frame} ($\approx$4,8 detik) \\
+\textit{Minimum matching threshold}      & 0,85 \\
+\textit{Track activation threshold}      & 0,4 \\
 \hline
 \end{tabular}
 \end{table}
@@ -230,14 +230,14 @@ Maksimum objek simultan                  & 11 \\
 \label{fig:tracking-vis}
 \end{figure}
 
-Keberhasilan ByteTrack dalam mempertahankan 135 identitas unik tanpa fragmentasi signifikan dapat diatribusikan pada mekanisme asosiasi dua tahap (\textit{two-stage association}) yang menjadi keunggulan fundamental algoritma ini \cite{zhang2022bytetrack}: deteksi berkonfidensialitas tinggi diasosiasikan terlebih dahulu melalui pencocokan berbasis IoU, kemudian deteksi berkonfidensialitas rendah dimanfaatkan untuk merecoveri \textit{track} yang hilang akibat oklusi sesaat. Kapabilitas penanganan hingga 11 objek simultan mendemonstrasikan skalabilitas yang memadai untuk kondisi kepadatan puncak pada gerbang kampus. Konfigurasi \textit{lost track buffer} sebesar 60 \textit{frame}---ekuivalen dengan $\approx$4 detik pada laju pemrosesan efektif---memungkinkan persistensi identitas pengendara selama oklusi temporal, suatu parameter yang dioptimasi berdasarkan rerata durasi lintasan kendaraan melewati \textit{field of view} kamera. Stabilitas pelacakan ini merupakan prasyarat esensial bagi mekanisme konfirmasi temporal N-\textit{frame} yang dibahas pada subbab berikutnya, karena akurasi identifikasi pelanggaran bergantung langsung pada konsistensi asosiasi identitas objek lintas-\textit{frame} \cite{dendorfer2021motchallenge}.
+Keberhasilan ByteTrack dalam mempertahankan 134 identitas unik tanpa fragmentasi signifikan dapat diatribusikan pada mekanisme asosiasi dua tahap (\textit{two-stage association}) yang menjadi keunggulan fundamental algoritma ini \cite{zhang2022bytetrack}: deteksi berkonfidensialitas tinggi diasosiasikan terlebih dahulu melalui pencocokan berbasis IoU, kemudian deteksi berkonfidensialitas rendah dimanfaatkan untuk merecoveri \textit{track} yang hilang akibat oklusi sesaat. Konfigurasi \textit{track activation threshold} 0,4 memungkinkan ByteTrack memulai pelacakan pada deteksi dengan konfidensialitas sedang, sementara \textit{matching threshold} 0,85 yang relatif tinggi menghasilkan pencocokan yang lebih permisif---biaya asosiasi dihitung sebagai $1 - \text{IoU} \times \text{confidence}$, sehingga ambang 0,85 berarti asosiasi diterima jika $\text{IoU} \times \text{confidence} > 0,15$---mengurangi fragmentasi identitas pada skenario oklusi parsial. Kapabilitas penanganan hingga 11 objek simultan mendemonstrasikan skalabilitas yang memadai untuk kondisi kepadatan puncak pada gerbang kampus. Konfigurasi \textit{lost track buffer} sebesar 120 \textit{frame}---ekuivalen dengan $\approx$4,8 detik pada laju pemrosesan efektif---memungkinkan persistensi identitas pengendara selama oklusi temporal yang cukup panjang, suatu parameter yang dioptimasi berdasarkan rerata durasi lintasan kendaraan melewati \textit{field of view} kamera. Stabilitas pelacakan ini merupakan prasyarat esensial bagi mekanisme konfirmasi temporal N-\textit{frame} yang dibahas pada subbab berikutnya, karena akurasi identifikasi pelanggaran bergantung langsung pada konsistensi asosiasi identitas objek lintas-\textit{frame} \cite{dendorfer2021motchallenge}.
 
 % ------------------------------------------------------------
 \subsection{Mekanisme \textit{Threshold} Temporal untuk Konfirmasi Pelanggaran}
 \label{subsec:threshold-temporal}
 % ------------------------------------------------------------
 
-Eksperimen komparatif dengan tiga variasi \textit{threshold} temporal ($N = 1, 3, 5$) pada 3.000 \textit{frame} video uji menghasilkan gradasi yang jelas antara sensitivitas dan reliabilitas, sebagaimana dirangkum pada Tabel~\ref{tab:threshold-comparison}. Konfigurasi $N = 1$ mengonfirmasi 63 pelanggaran dengan \textit{confidence} rata-rata 0,721; konfigurasi $N = 3$ mengonfirmasi 60 pelanggaran dengan \textit{confidence} 0,751; dan konfigurasi $N = 5$ mengonfirmasi 57 pelanggaran dengan \textit{confidence} 0,778. Perbandingan visual antar-konfigurasi diilustrasikan pada Gambar~\ref{fig:threshold-comparison}.
+Eksperimen komparatif dengan tiga variasi \textit{threshold} temporal ($N = 1, 3, 5$) pada 3.000 \textit{frame} video uji menghasilkan gradasi yang jelas antara sensitivitas dan reliabilitas, sebagaimana dirangkum pada Tabel~\ref{tab:threshold-comparison}. Konfigurasi $N = 1$ mengonfirmasi 59 pelanggaran dengan \textit{confidence} rata-rata 0,736; konfigurasi $N = 3$ mengonfirmasi 57 pelanggaran dengan \textit{confidence} 0,763; dan konfigurasi $N = 5$ mengonfirmasi 56 pelanggaran dengan \textit{confidence} 0,779. Perbandingan visual antar-konfigurasi diilustrasikan pada Gambar~\ref{fig:threshold-comparison}.
 
 \begin{table}[htbp]
 \centering
@@ -247,9 +247,9 @@ Eksperimen komparatif dengan tiga variasi \textit{threshold} temporal ($N = 1, 3
 \hline
 \textbf{$N$ \textit{frame}} & \textbf{Jumlah Pelanggaran} & \textbf{\textit{Confidence} Rata-rata} & \textbf{Karakteristik} \\
 \hline
-1 & 63 & 0,721 & Tercepat, rentan \textit{noise} \\
-3 & 60 & 0,751 & Optimal \\
-5 & 57 & 0,778 & \textit{Confidence} tertinggi, \textit{delay} lebih besar \\
+1 & 59 & 0,736 & Tercepat, rentan \textit{noise} \\
+3 & 57 & 0,763 & Optimal \\
+5 & 56 & 0,779 & \textit{Confidence} tertinggi, \textit{delay} lebih besar \\
 \hline
 \end{tabular}
 \end{table}
@@ -262,14 +262,14 @@ Eksperimen komparatif dengan tiga variasi \textit{threshold} temporal ($N = 1, 3
 \label{fig:threshold-comparison}
 \end{figure}
 
-Konfigurasi $N = 3$ terpilih sebagai nilai optimal berdasarkan analisis keseimbangan antara sensitivitas dan spesifisitas. Investigasi mendalam terhadap tiga deteksi tambahan pada $N = 1$ (\textit{track ID} 52, 68, dan 159) mengonfirmasi bahwa ketiganya merupakan \textit{false violation} yang dipicu oleh kesalahan klasifikasi sesaat pada satu \textit{frame}, mengindikasikan kerentanan pendekatan tanpa filter temporal terhadap \textit{noise} deteksi \cite{han2020mining}. Sebaliknya, konfigurasi $N = 5$ kehilangan 3 pelanggaran yang tervalidasi secara visual (\textit{track} 34, 82, dan 95) karena durasi lintasan objek tidak mencukupi ambang batas 5 \textit{frame}. Konfigurasi $N = 3$ meningkatkan \textit{confidence} rata-rata sebesar 4,2\% (dari 0,721 menjadi 0,751) dibandingkan $N = 1$ sambil mengeliminasi seluruh \textit{false positive}, dan mempertahankan 3 pelanggaran valid tambahan dibandingkan $N = 5$ dengan penambahan \textit{delay} konfirmasi yang marginal ($\approx$240 ms pada 8 FPS). Mekanisme ini, dilengkapi dengan \textit{patience-based decay} 2 \textit{frame} dan filter spasial IoA $\geq$ 0,2 terhadap \textit{bounding box} sepeda motor, secara empiris mengonfirmasi efektivitas pendekatan \textit{multi-frame temporal consistency} dalam menyaring \textit{noise} deteksi pada aplikasi surveilans \cite{pareek2021survey}.
+Konfigurasi $N = 3$ terpilih sebagai nilai optimal berdasarkan analisis keseimbangan antara sensitivitas dan spesifisitas. Investigasi mendalam terhadap dua deteksi tambahan pada $N = 1$ mengonfirmasi bahwa keduanya merupakan \textit{false violation} yang dipicu oleh kesalahan klasifikasi sesaat pada satu \textit{frame}, mengindikasikan kerentanan pendekatan tanpa filter temporal terhadap \textit{noise} deteksi \cite{han2020mining}. Sebaliknya, konfigurasi $N = 5$ kehilangan 1 pelanggaran yang tervalidasi secara visual karena durasi lintasan objek tidak mencukupi ambang batas 5 \textit{frame}. Konfigurasi $N = 3$ meningkatkan \textit{confidence} rata-rata sebesar 3,7\% (dari 0,736 menjadi 0,763) dibandingkan $N = 1$ sambil mengeliminasi seluruh \textit{false positive}, dan mempertahankan 1 pelanggaran valid tambahan dibandingkan $N = 5$ dengan penambahan \textit{delay} konfirmasi yang marginal ($\approx$390 ms pada 7,63 FPS). Mekanisme ini, dilengkapi dengan \textit{patience-based decay} 5 \textit{frame} dan filter spasial IoA $\geq$ 0,3 terhadap \textit{bounding box} sepeda motor, secara empiris mengonfirmasi efektivitas pendekatan \textit{multi-frame temporal consistency} dalam menyaring \textit{noise} deteksi pada aplikasi surveilans \cite{pareek2021survey}.
 
 % ------------------------------------------------------------
 \subsection{Karakterisasi \textit{Throughput} Pipeline Deteksi}
 \label{subsec:throughput}
 % ------------------------------------------------------------
 
-Pengukuran \textit{throughput} selama pemrosesan 3.000 \textit{frame} pada prosesor Intel Core i5-5200U tanpa akselerasi GPU menghasilkan FPS rata-rata 8,29 (median 8,85), dengan rentang 1,14--9,77 FPS dan standar deviasi 1,44 FPS, sebagaimana dirinci pada Tabel~\ref{tab:throughput}. Total waktu pemrosesan tercatat 389,2 detik. Distribusi FPS sepanjang durasi pemrosesan divisualisasikan pada Gambar~\ref{fig:fps-over-time}.
+Pengukuran \textit{throughput} selama pemrosesan 3.000 \textit{frame} pada prosesor Intel Core i5-5200U tanpa akselerasi GPU menghasilkan FPS rata-rata 7,63 (median 7,13), dengan rentang 1,26--9,67 FPS dan standar deviasi 1,28 FPS, sebagaimana dirinci pada Tabel~\ref{tab:throughput}. Total waktu pemrosesan tercatat 413,5 detik. Distribusi FPS sepanjang durasi pemrosesan divisualisasikan pada Gambar~\ref{fig:fps-over-time}.
 
 \begin{table}[htbp]
 \centering
@@ -279,14 +279,14 @@ Pengukuran \textit{throughput} selama pemrosesan 3.000 \textit{frame} pada prose
 \hline
 \textbf{Metrik} & \textbf{Nilai} \\
 \hline
-FPS rata-rata          & 8,29 \\
-FPS median             & 8,85 \\
-FPS minimum            & 1,14 \\
-FPS maksimum           & 9,77 \\
-FPS persentil ke-5     & 5,25 \\
-FPS persentil ke-95    & 9,51 \\
-Standar deviasi FPS    & 1,44 \\
-Total waktu pemrosesan & 389,2 detik \\
+FPS rata-rata          & 7,63 \\
+FPS median             & 7,13 \\
+FPS minimum            & 1,26 \\
+FPS maksimum           & 9,67 \\
+FPS persentil ke-5     & 6,02 \\
+FPS persentil ke-95    & 9,33 \\
+Standar deviasi FPS    & 1,28 \\
+Total waktu pemrosesan & 413,5 detik \\
 \hline
 \end{tabular}
 \end{table}
@@ -299,14 +299,14 @@ Total waktu pemrosesan & 389,2 detik \\
 \label{fig:fps-over-time}
 \end{figure}
 
-Capaian \textit{throughput} 8,29 FPS pada CPU merupakan konsekuensi yang diharapkan mengingat dominasi \textit{latency} inferensi YOLOv8 pada perangkat tanpa akselerasi GPU \cite{jocher2023ultralytics}. Meskipun lebih rendah dari laju video asli (25 FPS), nilai ini tetap memenuhi kebutuhan fungsional deteksi pelanggaran lalu lintas kampus yang tidak mensyaratkan pemrosesan setiap \textit{frame}---cukup dengan pengambilan sampel pada interval yang memadai untuk menangkap setiap pengendara yang melintas. Stabilitas yang ditunjukkan oleh rentang persentil ke-5 hingga ke-95 (5,25--9,51 FPS) mengindikasikan bahwa 90\% durasi operasi berada dalam koridor kinerja yang konsisten dan dapat diprediksi. Anomali penurunan FPS minimum hingga 1,14 terobservasi hanya pada \textit{frame} awal akibat \textit{cold start} dan alokasi memori inisial. Merujuk pada karakteristik akselerasi GPU untuk arsitektur YOLO \cite{bochkovskiy2020yolov4}, adopsi perangkat grafis kompatibel CUDA diproyeksikan mampu meningkatkan \textit{throughput} sebesar 5--10$\times$ (40--80 FPS), membuka kemungkinan pemrosesan \textit{real-time} penuh.
+Capaian \textit{throughput} 7,63 FPS pada CPU merupakan konsekuensi yang diharapkan mengingat dominasi \textit{latency} inferensi YOLOv8 pada perangkat tanpa akselerasi GPU \cite{jocher2023ultralytics}. Penggunaan \textit{confidence threshold} yang rendah (0,25) menghasilkan lebih banyak deteksi per \textit{frame} (3,72), meningkatkan beban komputasi pada tahap pelacakan dan \textit{non-maximum suppression}. Meskipun lebih rendah dari laju video asli (25 FPS), nilai ini tetap memenuhi kebutuhan fungsional deteksi pelanggaran lalu lintas kampus yang tidak mensyaratkan pemrosesan setiap \textit{frame}---cukup dengan pengambilan sampel pada interval yang memadai untuk menangkap setiap pengendara yang melintas. Stabilitas yang ditunjukkan oleh rentang persentil ke-5 hingga ke-95 (6,02--9,33 FPS) mengindikasikan bahwa 90\% durasi operasi berada dalam koridor kinerja yang konsisten dan dapat diprediksi. Anomali penurunan FPS minimum hingga 1,26 terobservasi hanya pada \textit{frame} awal akibat \textit{cold start} dan alokasi memori inisial. Merujuk pada karakteristik akselerasi GPU untuk arsitektur YOLO \cite{bochkovskiy2020yolov4}, adopsi perangkat grafis kompatibel CUDA diproyeksikan mampu meningkatkan \textit{throughput} sebesar 5--10$\times$ (38--76 FPS), membuka kemungkinan pemrosesan \textit{real-time} penuh.
 
 % ------------------------------------------------------------
 \subsection{Dekomposisi \textit{Latency} Pipeline \textit{End-to-End}}
 \label{subsec:latency}
 % ------------------------------------------------------------
 
-Dekomposisi \textit{latency} per komponen menunjukkan bahwa inferensi YOLOv8 mendominasi 98,8\% total waktu pemrosesan (126,64 ms dari 128,16 ms), dengan pelacakan ByteTrack mengonsumsi 1,49 ms (1,2\%) dan logika pelanggaran hanya 0,04 ms, sebagaimana dirangkum pada Tabel~\ref{tab:latency-komponen}. Median \textit{latency} \textit{end-to-end} tercatat 112,99 ms dengan P95 pada 190,40 ms dan P99 pada 363,67 ms. Proporsi kontribusi \textit{latency} per komponen dan distribusi \textit{latency} total divisualisasikan masing-masing pada Gambar~\ref{fig:latency-breakdown} dan Gambar~\ref{fig:latency-histogram}.
+Dekomposisi \textit{latency} per komponen menunjukkan bahwa inferensi YOLOv8 mendominasi 98,6\% total waktu pemrosesan (134,21 ms dari 136,17 ms), dengan pelacakan ByteTrack mengonsumsi 1,91 ms (1,4\%) dan logika pelanggaran hanya 0,05 ms, sebagaimana dirangkum pada Tabel~\ref{tab:latency-komponen}. Median \textit{latency} \textit{end-to-end} tercatat 140,32 ms dengan P95 pada 166,24 ms dan P99 pada 240,43 ms. Proporsi kontribusi \textit{latency} per komponen dan distribusi \textit{latency} total divisualisasikan masing-masing pada Gambar~\ref{fig:latency-breakdown} dan Gambar~\ref{fig:latency-histogram}.
 
 \begin{table}[htbp]
 \centering
@@ -316,11 +316,11 @@ Dekomposisi \textit{latency} per komponen menunjukkan bahwa inferensi YOLOv8 men
 \hline
 \textbf{Komponen} & \textbf{Rata-rata} & \textbf{Median} & \textbf{P95} & \textbf{P99} \\
 \hline
-Inferensi YOLOv8         & 126,64 & 111,57 & 187,93 & 361,70 \\
-Pelacakan ByteTrack      &   1,49 &   1,61 &   3,26 &   5,00 \\
-Logika pelanggaran       &   0,04 &   0,03 &   0,08 &    --- \\
+Inferensi YOLOv8         & 134,21 & 138,07 & 163,52 & 234,10 \\
+Pelacakan ByteTrack      &   1,91 &   1,87 &   4,00 &   5,42 \\
+Logika pelanggaran       &   0,05 &   0,04 &   0,09 &    --- \\
 \hline
-\textbf{Total pipeline}  & 128,16 & 112,99 & 190,40 & 363,67 \\
+\textbf{Total pipeline}  & 136,17 & 140,32 & 166,24 & 240,43 \\
 \hline
 \end{tabular}
 \end{table}
@@ -341,7 +341,7 @@ Logika pelanggaran       &   0,04 &   0,03 &   0,08 &    --- \\
 \label{fig:latency-histogram}
 \end{figure}
 
-Dominasi inferensi YOLOv8 (98,8\%) sebagai \textit{bottleneck} komputasi konsisten dengan karakteristik arsitektur \textit{deep neural network} yang menuntut operasi matriks intensif pada tahap \textit{forward pass} \cite{jocher2023ultralytics}. Efisiensi komputasi ByteTrack yang hanya memerlukan 1,49 ms mendemonstrasikan keunggulan algoritma pencocokan berbasis IoU dan prediksi Kalman filter dengan kompleksitas $O(nm)$, di mana $n$ dan $m$ masing-masing merupakan jumlah \textit{track} aktif dan deteksi baru \cite{zhang2022bytetrack}. Logika validasi pelanggaran yang bersifat \textit{negligible} (0,04 ms) merupakan konsekuensi dari desain berbasis operasi \textit{lookup} pada struktur data \textit{dictionary} dengan kompleksitas $O(1)$. Median \textit{latency} 112,99 ms yang secara substansial berada di bawah ambang batas 1 detik memenuhi persyaratan \textit{near real-time}. Disparitas antara P95 dan P99 mengindikasikan \textit{latency spike} intermiten yang kemungkinan disebabkan oleh \textit{garbage collection} Python atau \textit{context switching} pada level sistem operasi, suatu fenomena yang lazim pada runtime interpreter \cite{belay2012dune}.
+Dominasi inferensi YOLOv8 (98,6\%) sebagai \textit{bottleneck} komputasi konsisten dengan karakteristik arsitektur \textit{deep neural network} yang menuntut operasi matriks intensif pada tahap \textit{forward pass} \cite{jocher2023ultralytics}. Efisiensi komputasi ByteTrack yang hanya memerlukan 1,91 ms mendemonstrasikan keunggulan algoritma pencocokan berbasis IoU dan prediksi Kalman filter dengan kompleksitas $O(nm)$, di mana $n$ dan $m$ masing-masing merupakan jumlah \textit{track} aktif dan deteksi baru \cite{zhang2022bytetrack}. Logika validasi pelanggaran yang bersifat \textit{negligible} (0,05 ms) merupakan konsekuensi dari desain berbasis operasi \textit{lookup} pada struktur data \textit{dictionary} dengan kompleksitas $O(1)$. Median \textit{latency} 140,32 ms yang secara substansial berada di bawah ambang batas 1 detik memenuhi persyaratan \textit{near real-time}. Perbedaan yang moderat antara P95 (166,24 ms) dan P99 (240,43 ms) mengindikasikan \textit{latency spike} intermiten yang kemungkinan disebabkan oleh \textit{garbage collection} Python atau \textit{context switching} pada level sistem operasi, suatu fenomena yang lazim pada runtime interpreter \cite{belay2012dune}.
 
 % ------------------------------------------------------------
 \subsection{Profil Penggunaan Sumber Daya Komputasi}
@@ -376,7 +376,7 @@ Utilisasi CPU pipeline deteksi yang melampaui 100\% merupakan konsekuensi dari p
 \label{subsec:event-stream}
 % ------------------------------------------------------------
 
-Pipeline menghasilkan 60 \textit{event} pelanggaran terkonfirmasi pada konfigurasi $N = 3$, dengan \textit{confidence} rata-rata 0,751 dan rentang distribusi 0,563--0,895. Setiap \textit{event} direpresentasikan sebagai objek \texttt{ViolationEvent} dengan atribut komprehensif meliputi \texttt{event\_id} (UUID), \texttt{track\_id}, \texttt{timestamp} (UTC), \texttt{camera\_id}, \texttt{violation\_type}, \texttt{confidence}, \texttt{bbox}, \texttt{frame\_number}, dan \texttt{processing\_latency\_ms}. Sampel representatif dari \textit{event} pelanggaran yang dihasilkan disajikan pada Tabel~\ref{tab:sampel-event}.
+Pipeline menghasilkan 57 \textit{event} pelanggaran terkonfirmasi pada konfigurasi $N = 3$, dengan \textit{confidence} rata-rata 0,763 dan rentang distribusi 0,541--0,895. Setiap \textit{event} direpresentasikan sebagai objek \texttt{ViolationEvent} dengan atribut komprehensif meliputi \texttt{event\_id} (UUID), \texttt{track\_id}, \texttt{timestamp} (UTC), \texttt{camera\_id}, \texttt{violation\_type}, \texttt{confidence}, \texttt{bbox}, \texttt{frame\_number}, dan \texttt{processing\_latency\_ms}. Sampel representatif dari \textit{event} pelanggaran yang dihasilkan disajikan pada Tabel~\ref{tab:sampel-event}.
 
 \begin{table}[htbp]
 \centering
@@ -389,9 +389,9 @@ Pipeline menghasilkan 60 \textit{event} pelanggaran terkonfirmasi pada konfigura
 \hline
 4   &    3 & 0,895 & gate\_utama\_01 & (990, 312, 1058, 489) \\
 3   &    3 & 0,881 & gate\_utama\_01 & (775, 227, 822, 345) \\
-17  &   78 & 0,842 & gate\_utama\_01 & (701, 207, 748, 285) \\
-82  &  834 & 0,876 & gate\_utama\_01 & (994, 298, 1073, 537) \\
-163 & 2351 & 0,865 & gate\_utama\_01 & (575, 214, 621, 310) \\
+18  &   78 & 0,842 & gate\_utama\_01 & (701, 207, 748, 285) \\
+82  &  745 & 0,891 & gate\_utama\_01 & (994, 298, 1073, 537) \\
+170 & 2351 & 0,876 & gate\_utama\_01 & (575, 214, 621, 310) \\
 \hline
 \end{tabular}
 \end{table}
@@ -485,7 +485,7 @@ Waktu \textit{flush}                & 142,44 ms \\
 \end{tabular}
 \end{table}
 
-Kapasitas \textit{throughput} 3.275 pesan/detik secara substansial melampaui kebutuhan operasional sistem satu kamera yang hanya menghasilkan $\approx$8 \textit{event}/detik, mengindikasikan skalabilitas infrastruktur Kafka hingga $\approx$400 kamera simultan tanpa modifikasi konfigurasi \cite{kreps2011kafka}. Optimasi \textit{producer} melalui kompresi \textit{Snappy}, \textit{batch.num.messages} = 100, dan \textit{linger.ms} = 5 ms memaksimalkan efisiensi \textit{micro-batching} tanpa mengorbankan \textit{latency} pengiriman. Parameter \texttt{acks=all} menjamin durabilitas pesan meskipun menambahkan overhead marginal pada waktu \textit{flush} (142,44 ms)---suatu konfigurasi yang merepresentasikan kompromi optimal antara \textit{throughput}, \textit{latency}, dan reliabilitas sebagaimana direkomendasikan untuk sistem \textit{event-driven} berskala produksi \cite{narkhede2017kafka}. \textit{Latency} per pesan yang sangat rendah (median 0,014 ms) mengonfirmasi bahwa overhead transmisi Kafka secara efektif \textit{negligible} terhadap \textit{latency} keseluruhan pipeline.
+Kapasitas \textit{throughput} 3.275 pesan/detik secara substansial melampaui kebutuhan operasional sistem satu kamera yang hanya menghasilkan $\approx$7,6 \textit{event}/detik, mengindikasikan skalabilitas infrastruktur Kafka hingga $\approx$430 kamera simultan tanpa modifikasi konfigurasi \cite{kreps2011kafka}. Optimasi \textit{producer} melalui kompresi \textit{Snappy}, \textit{batch.num.messages} = 100, dan \textit{linger.ms} = 5 ms memaksimalkan efisiensi \textit{micro-batching} tanpa mengorbankan \textit{latency} pengiriman. Parameter \texttt{acks=all} menjamin durabilitas pesan meskipun menambahkan overhead marginal pada waktu \textit{flush} (142,44 ms)---suatu konfigurasi yang merepresentasikan kompromi optimal antara \textit{throughput}, \textit{latency}, dan reliabilitas sebagaimana direkomendasikan untuk sistem \textit{event-driven} berskala produksi \cite{narkhede2017kafka}. \textit{Latency} per pesan yang sangat rendah (median 0,014 ms) mengonfirmasi bahwa overhead transmisi Kafka secara efektif \textit{negligible} terhadap \textit{latency} keseluruhan pipeline.
 
 % ------------------------------------------------------------
 \subsection{Kinerja Spark Structured Streaming}
@@ -494,7 +494,7 @@ Kapasitas \textit{throughput} 3.275 pesan/detik secara substansial melampaui keb
 
 Profil sumber daya Spark Structured Streaming selama pemrosesan menunjukkan konsumsi CPU rata-rata 19,83\% (puncak 155,80\%) dan memori 757 MB (puncak 835 MB), sebagaimana tercatat pada Tabel~\ref{tab:resource-usage}. Konfigurasi runtime dioptimasi melalui \texttt{spark.sql.shuffle.partitions=4} dan \texttt{spark.driver.memory=3g} yang disesuaikan dengan batasan RAM perangkat uji. Pengayaan dimensi waktu yang dilaksanakan mencakup \texttt{hour}, \texttt{minute}, \texttt{day\_of\_week}, \texttt{date}, \texttt{week\_of\_year}, \texttt{month}, \texttt{year}, serta \texttt{time\_period} dengan pemetaan periode waktu Indonesia (pagi: 05--10, siang: 11--14, sore: 15--17, malam: lainnya).
 
-\textit{Latency end-to-end} dari deteksi hingga persistensi ke PostgreSQL diestimasi 5--10 detik, yang merupakan akumulasi dari \textit{latency} pipeline deteksi ($\approx$128 ms), transmisi Kafka ($<$1 ms), dan interval \textit{micro-batch} Spark (5 detik). Pemetaan periode waktu Indonesia dirancang spesifik untuk mengakomodasi pola kegiatan kampus, memungkinkan analisis yang relevan dengan jadwal perkuliahan dan aktivitas institusional \cite{armbrust2018structured}. \textit{Latency end-to-end} 5--10 detik masih berada dalam batas yang dapat diterima mengingat \textit{data mart} ditujukan untuk analitik keselamatan retrospektif, bukan sistem kontrol kendaraan yang mensyaratkan responsivitas sub-detik. Konfigurasi \texttt{shuffle.partitions=4} yang lebih rendah dari nilai \textit{default} (200) dipilih untuk meminimalkan overhead koordinasi \textit{task} pada \textit{single-node deployment}, mengikuti rekomendasi optimasi Spark untuk skenario \textit{low-latency streaming} pada perangkat dengan sumber daya terbatas \cite{chambers2018spark}.
+\textit{Latency end-to-end} dari deteksi hingga persistensi ke PostgreSQL diestimasi 5--10 detik, yang merupakan akumulasi dari \textit{latency} pipeline deteksi ($\approx$136 ms), transmisi Kafka ($<$1 ms), dan interval \textit{micro-batch} Spark (5 detik). Pemetaan periode waktu Indonesia dirancang spesifik untuk mengakomodasi pola kegiatan kampus, memungkinkan analisis yang relevan dengan jadwal perkuliahan dan aktivitas institusional \cite{armbrust2018structured}. \textit{Latency end-to-end} 5--10 detik masih berada dalam batas yang dapat diterima mengingat \textit{data mart} ditujukan untuk analitik keselamatan retrospektif, bukan sistem kontrol kendaraan yang mensyaratkan responsivitas sub-detik. Konfigurasi \texttt{shuffle.partitions=4} yang lebih rendah dari nilai \textit{default} (200) dipilih untuk meminimalkan overhead koordinasi \textit{task} pada \textit{single-node deployment}, mengikuti rekomendasi optimasi Spark untuk skenario \textit{low-latency streaming} pada perangkat dengan sumber daya terbatas \cite{chambers2018spark}.
 
 % ------------------------------------------------------------
 \subsection{Visualisasi \textit{Dashboard} Analitik Keselamatan Kampus}
@@ -526,7 +526,7 @@ Desain pemetaan satu-ke-satu antara panel \textit{dashboard} dan \textit{analyti
 \label{subsec:analisis-pola}
 % ------------------------------------------------------------
 
-Analisis distribusi \textit{confidence} dari 60 pelanggaran terkonfirmasi menghasilkan rentang 0,563--0,895 dengan rerata 0,751, di mana 71,7\% pelanggaran terdeteksi dengan \textit{confidence} di atas 0,70 dan hanya 5,0\% berada pada rentang rendah (0,50--0,60), sebagaimana dirinci pada Tabel~\ref{tab:distribusi-confidence}. Struktur \textit{star schema} memungkinkan empat dimensi analisis: distribusi temporal melalui \texttt{vw\_peak\_hours}, distribusi spasial melalui \texttt{vw\_camera\_stats}, tren historis melalui \texttt{vw\_daily\_trend}, dan karakteristik deteksi melalui distribusi \textit{confidence}.
+Analisis distribusi \textit{confidence} dari 57 pelanggaran terkonfirmasi menghasilkan rentang 0,541--0,895 dengan rerata 0,763, di mana 73,7\% pelanggaran terdeteksi dengan \textit{confidence} di atas 0,70 dan hanya 3,5\% berada pada rentang rendah (0,50--0,60), sebagaimana dirinci pada Tabel~\ref{tab:distribusi-confidence}. Struktur \textit{star schema} memungkinkan empat dimensi analisis: distribusi temporal melalui \texttt{vw\_peak\_hours}, distribusi spasial melalui \texttt{vw\_camera\_stats}, tren historis melalui \texttt{vw\_daily\_trend}, dan karakteristik deteksi melalui distribusi \textit{confidence}.
 
 \begin{table}[htbp]
 \centering
@@ -536,17 +536,17 @@ Analisis distribusi \textit{confidence} dari 60 pelanggaran terkonfirmasi mengha
 \hline
 \textbf{Rentang \textit{Confidence}} & \textbf{Jumlah} & \textbf{Persentase} \\
 \hline
-0,50 -- 0,60 & 3  & 5,0\% \\
-0,60 -- 0,70 & 14 & 23,3\% \\
-0,70 -- 0,80 & 22 & 36,7\% \\
-0,80 -- 0,90 & 21 & 35,0\% \\
+0,50 -- 0,60 & 2  & 3,5\% \\
+0,60 -- 0,70 & 13 & 22,8\% \\
+0,70 -- 0,80 & 21 & 36,8\% \\
+0,80 -- 0,90 & 21 & 36,8\% \\
 \hline
-\textbf{Total} & 60 & 100,0\% \\
+\textbf{Total} & 57 & 100,0\% \\
 \hline
 \end{tabular}
 \end{table}
 
-Proporsi dominan pelanggaran dengan \textit{confidence} tinggi ($>$0,70: 71,7\%) mengonfirmasi reliabilitas keseluruhan pipeline deteksi dan validasi pelanggaran. Pelanggaran pada rentang \textit{confidence} rendah (0,50--0,60: 5,0\%) umumnya terjadi pada kondisi visual yang menantang---jarak objek jauh dari kamera atau oklusi parsial---konsisten dengan analisis kesalahan pada Subbab~\ref{subsec:analisis-kesalahan}. Temuan ini mengindikasikan bahwa mekanisme konfirmasi temporal N-\textit{frame} berhasil menyaring sebagian besar deteksi berkepercayaan rendah, sehingga data yang tersimpan dalam \textit{data mart} memiliki tingkat reliabilitas yang tinggi untuk mendukung pengambilan keputusan keselamatan \cite{pareek2021survey}. Kemampuan analisis multidimensi melalui empat \textit{analytical view}---temporal, spasial, historis, dan karakteristik deteksi---merepresentasikan nilai tambah signifikan dari pendekatan \textit{star schema}, memungkinkan pengelola kampus melakukan \textit{drill-down analysis} yang tidak dimungkinkan oleh sistem pemantauan konvensional berbasis pengawasan visual langsung \cite{kimball2013data}.
+Proporsi dominan pelanggaran dengan \textit{confidence} tinggi ($>$0,70: 73,7\%) mengonfirmasi reliabilitas keseluruhan pipeline deteksi dan validasi pelanggaran. Pelanggaran pada rentang \textit{confidence} rendah (0,50--0,60: 3,5\%) umumnya terjadi pada kondisi visual yang menantang---jarak objek jauh dari kamera atau oklusi parsial---konsisten dengan analisis kesalahan pada Subbab~\ref{subsec:analisis-kesalahan}. Temuan ini mengindikasikan bahwa mekanisme konfirmasi temporal N-\textit{frame} berhasil menyaring sebagian besar deteksi berkepercayaan rendah, sehingga data yang tersimpan dalam \textit{data mart} memiliki tingkat reliabilitas yang tinggi untuk mendukung pengambilan keputusan keselamatan \cite{pareek2021survey}. Kemampuan analisis multidimensi melalui empat \textit{analytical view}---temporal, spasial, historis, dan karakteristik deteksi---merepresentasikan nilai tambah signifikan dari pendekatan \textit{star schema}, memungkinkan pengelola kampus melakukan \textit{drill-down analysis} yang tidak dimungkinkan oleh sistem pemantauan konvensional berbasis pengawasan visual langsung \cite{kimball2013data}.
 
 
 % ============================================================
@@ -567,9 +567,9 @@ Tabel~\ref{tab:ringkasan-hasil} merangkum seluruh hasil evaluasi sistem \textit{
 \hline
 mAP@50 model deteksi & $\geq$ 80\% & 90,0\% & \checkmark \\
 AP kelas target (\texttt{NO\_HELMET}) & $\geq$ 80\% & 90,0\% & \checkmark \\
-Konsistensi pelacakan & Identitas persisten & 135 \textit{track} unik & \checkmark \\
-\textit{Threshold} temporal & Reduksi \textit{false positive} & $N=3$ optimal, +4,2\% \textit{confidence} & \checkmark \\
-\textit{Latency} pipeline & $<$ 1 detik & 128,16 ms & \checkmark \\
+Konsistensi pelacakan & Identitas persisten & 134 \textit{track} unik & \checkmark \\
+\textit{Threshold} temporal & Reduksi \textit{false positive} & $N=3$ optimal, +3,7\% \textit{confidence} & \checkmark \\
+\textit{Latency} pipeline & $<$ 1 detik & 136,17 ms & \checkmark \\
 \textit{Throughput} Kafka & $>$ 100 pesan/detik & 3.275 pesan/detik & \checkmark \\
 Memori total sistem & $<$ 4 GB & 1,95 GB & \checkmark \\
 \textit{Data mart} analitik & \textit{Star schema} operasional & 6 \textit{view} + \textit{dashboard} & \checkmark \\
@@ -577,4 +577,4 @@ Memori total sistem & $<$ 4 GB & 1,95 GB & \checkmark \\
 \end{tabular}
 \end{table}
 
-Pemenuhan seluruh metrik secara konsisten mendemonstrasikan bahwa arsitektur terintegrasi YOLOv8--ByteTrack--Kafka--Spark yang dikembangkan dalam penelitian ini mampu: (1) mendeteksi pelanggaran helm dengan akurasi tinggi (mAP@50 = 90,0\%) yang melampaui target dan kompetitif terhadap studi sejenis \cite{wang2021helmet}, (2) mempertahankan identitas objek secara persisten melalui pelacakan ByteTrack (135 \textit{track} unik) dengan validasi temporal yang meningkatkan \textit{confidence} 4,2\% \cite{zhang2022bytetrack}, (3) memproses video secara \textit{near real-time} (128,16 ms \textit{latency}) pada perangkat komputasi terbatas (1,95 GB memori total), serta (4) menyediakan \textit{data mart} analitik historis komprehensif melalui \textit{star schema} PostgreSQL dan \textit{dashboard} Grafana interaktif \cite{kimball2013data}. Capaian-capaian tersebut mengonfirmasi kelayakan dan efektivitas pendekatan integrasi \textit{deep learning}, \textit{multi-object tracking}, dan \textit{stream processing} sebagai solusi deteksi pelanggaran helm yang aplikatif untuk lingkungan kampus.
+Pemenuhan seluruh metrik secara konsisten mendemonstrasikan bahwa arsitektur terintegrasi YOLOv8--ByteTrack--Kafka--Spark yang dikembangkan dalam penelitian ini mampu: (1) mendeteksi pelanggaran helm dengan akurasi tinggi (mAP@50 = 90,0\%) yang melampaui target dan kompetitif terhadap studi sejenis \cite{wang2021helmet}, (2) mempertahankan identitas objek secara persisten melalui pelacakan ByteTrack (134 \textit{track} unik) dengan validasi temporal yang meningkatkan \textit{confidence} 3,7\% \cite{zhang2022bytetrack}, (3) memproses video secara \textit{near real-time} (136,17 ms \textit{latency}) pada perangkat komputasi terbatas (1,95 GB memori total), serta (4) menyediakan \textit{data mart} analitik historis komprehensif melalui \textit{star schema} PostgreSQL dan \textit{dashboard} Grafana interaktif \cite{kimball2013data}. Capaian-capaian tersebut mengonfirmasi kelayakan dan efektivitas pendekatan integrasi \textit{deep learning}, \textit{multi-object tracking}, dan \textit{stream processing} sebagai solusi deteksi pelanggaran helm yang aplikatif untuk lingkungan kampus.

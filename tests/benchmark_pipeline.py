@@ -65,8 +65,8 @@ class PipelineBenchmark:
 
         # Initialize components
         detector = HelmetDetector()
-        tracker = ObjectTracker(frame_rate=15)
-        violation_checker = ViolationDetector(confirm_frames=3)
+        tracker = ObjectTracker()
+        violation_checker = ViolationDetector()
 
         cap = cv2.VideoCapture(self.video_source)
         if not cap.isOpened():
@@ -265,7 +265,7 @@ class ThresholdComparison:
             logger.info(f"\n--- Testing N={n_threshold} ---")
 
             detector = HelmetDetector()
-            tracker = ObjectTracker(frame_rate=15)
+            tracker = ObjectTracker()
             violation_checker = ViolationDetector(confirm_frames=n_threshold)
 
             cap = cv2.VideoCapture(self.video_source)
@@ -437,7 +437,7 @@ def main():
     parser = argparse.ArgumentParser(description="ITERA Smart Sentinel — Benchmark Suite")
     parser.add_argument("--source", type=str, default="test.mp4", help="Video source")
     parser.add_argument("--frames", type=int, default=3000, help="Max frames (0=all)")
-    parser.add_argument("--output", type=str, default="benchmark_results.json", help="Output JSON file")
+    parser.add_argument("--output", type=str, default="benchmark/benchmark_results.json", help="Output JSON file")
     parser.add_argument("--skip-kafka", action="store_true", help="Skip Kafka benchmark")
     parser.add_argument("--skip-threshold", action="store_true", help="Skip threshold comparison")
     args = parser.parse_args()

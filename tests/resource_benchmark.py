@@ -95,8 +95,8 @@ def run_pipeline_with_resource_monitoring(video_source: str, max_frames: int) ->
 
     # Initialize components
     detector = HelmetDetector()
-    tracker = ObjectTracker(frame_rate=15)
-    violation_checker = ViolationDetector(confirm_frames=3)
+    tracker = ObjectTracker()
+    violation_checker = ViolationDetector()
 
     cap = cv2.VideoCapture(video_source)
     if not cap.isOpened():
@@ -155,7 +155,7 @@ def main():
     parser = argparse.ArgumentParser(description="ITERA Smart Sentinel — Resource Benchmark")
     parser.add_argument("--source", type=str, default="test.mp4", help="Video source")
     parser.add_argument("--frames", type=int, default=3000, help="Max frames (0=all)")
-    parser.add_argument("--output", type=str, default="resource_results.json", help="Output JSON file")
+    parser.add_argument("--output", type=str, default="benchmark/resource_results.json", help="Output JSON file")
     args = parser.parse_args()
 
     results = run_pipeline_with_resource_monitoring(args.source, args.frames)

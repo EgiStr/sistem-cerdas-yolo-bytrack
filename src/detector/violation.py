@@ -93,12 +93,14 @@ class ViolationDetector:
         confirm_frames: int | None = None,
         iou_threshold: float | None = None,
         camera_id: str | None = None,
+        patience_frames: int | None = None,
     ):
         self.confirm_frames = confirm_frames or settings.violation_confirm_frames
         self.iou_threshold = iou_threshold or settings.association_iou_threshold
         self.camera_id = camera_id or settings.camera_id
-        # Patience for transient occlusion (number of frames a track can be missing without resetting streak)
-        self.patience_frames = 2 
+        # Patience for transient occlusion (grace frames before resetting streak)
+        # Higher = more tolerant of intermittent detection gaps on slow devices
+        self.patience_frames = patience_frames or settings.violation_patience_frames
 
         # State tracking: track_id -> consecutive NoHelmet frame count
         self._no_helmet_streak: dict[int, int] = defaultdict(int)

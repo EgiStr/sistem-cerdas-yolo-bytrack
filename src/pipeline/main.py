@@ -39,11 +39,13 @@ class SentinelPipeline:
         enable_kafka: bool = True,
         show_display: bool = False,
         save_output: str | None = None,
+        frame_stride: int | None = None,
     ):
         self.video_source = video_source or settings.video_source
         self.enable_kafka = enable_kafka
         self.show_display = show_display
         self.save_output = save_output
+        self.frame_stride = frame_stride or settings.pipeline_frame_stride
 
         # Initialize components
         logger.info("=" * 60)
@@ -343,15 +345,32 @@ class SentinelPipeline:
             writer = cv2.VideoWriter(self.save_output, fourcc, fps, (w, h))
             logger.info(f"Saving output to: {self.save_output}")
 
-        # Initialize tracker with actual video FPS for correct max_time_lost
+        # --- Frame stride (skip frames for speed) ---
+        stride = self.frame_stride
         video_fps = int(cap.get(cv2.CAP_PROP_FPS)) or 30
-        self.tracker = ObjectTracker(frame_rate=video_fps)
+        effective_fps = max(1, video_fps // stride)
+
+        # Auto-calculate tracker frame_rate from effective FPS if set to 0
+        tracker_fps = settings.tracker_frame_rate or effective_fps
+        self.tracker = ObjectTracker(frame_rate=tracker_fps)
+
+        if stride > 1:
+            logger.info(
+                f"⚡ Frame stride={stride}: processing 1/{stride} frames "
+                f"(video {video_fps}fps → effective {effective_fps}fps for tracker)"
+            )
 
         self._start_time = time.time()
         logger.info("🚀 Pipeline running...")
 
         try:
             while True:
+                # --- Frame stride: skip N-1 frames cheaply ---
+                if stride > 1:
+                    for _ in range(stride - 1):
+                        if not cap.grab():  # grab() is cheap (no decode)
+                            break
+
                 ret, frame = cap.read()
                 if not ret:
                     logger.info("Video source ended or disconnected")
@@ -440,6 +459,8 @@ class SentinelPipeline:
         logger.info("📋 PIPELINE SUMMARY")
         logger.info("=" * 60)
         logger.info(f"Total frames processed: {self._frame_count}")
+        if self.frame_stride > 1:
+            logger.info(f"Frame stride: {self.frame_stride} (skipped ~{self._frame_count * (self.frame_stride-1)} frames)")
         logger.info(f"Total violations detected: {self._total_violations}")
         logger.info(f"Average FPS: {avg_fps:.1f}")
         logger.info(f"Total runtime: {elapsed:.1f}s")
@@ -465,6 +486,11 @@ def main():
         "--save-output", type=str, default=None,
         help="Save annotated output to video file"
     )
+    parser.add_argument(
+        "--stride", type=int, default=None,
+        help="Process every Nth frame (default from settings). "
+             "Use 3-5 for slow CPU devices to reduce processing time"
+    )
     args = parser.parse_args()
 
     pipeline = SentinelPipeline(
@@ -472,6 +498,7 @@ def main():
         enable_kafka=not args.no_kafka,
         show_display=args.display,
         save_output=args.save_output,
+        frame_stride=args.stride,
     )
     pipeline.run()
 
