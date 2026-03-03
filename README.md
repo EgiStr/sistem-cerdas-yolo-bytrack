@@ -139,13 +139,95 @@ The model classifies three object types:
 
 - **Python** ≥ 3.11
 - **uv** package manager ([install guide](https://docs.astral.sh/uv/getting-started/installation/))
-- **Apache Kafka** (with Zookeeper)
-- **Apache Spark** 3.5+ (for stream processing)
-- **PostgreSQL** (or Supabase)
-- **Grafana** (optional, for dashboards)
+- **Docker Desktop** (Windows/Mac) or **Docker Engine** (Linux) — for infrastructure services
 - **NVIDIA GPU** with CUDA ≥ 7.0 (optional, falls back to CPU)
 
-## Installation
+## Installation (Windows — Docker Compose)
+
+> **Recommended for Windows users.** Infrastructure services (Kafka, Spark, PostgreSQL, Grafana) run in Docker. Python pipeline (YOLOv8) runs natively via `uv`.
+
+### 1. Install prerequisites
+
+- [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/)
+- [uv package manager](https://docs.astral.sh/uv/getting-started/installation/)
+
+### 2. Clone and install
+
+```powershell
+git clone https://github.com/EgiStr/sistem-cerdas-yolo-bytrack.git
+cd sistem-cerdas-yolo-bytrack
+uv sync
+```
+
+### 3. Configure environment
+
+```powershell
+Copy-Item .env.example .env
+# Edit .env with your settings (video source, credentials)
+```
+
+### 4. Start all infrastructure
+
+```powershell
+# Start all Docker services (Kafka, Spark, PostgreSQL, Grafana)
+docker compose up -d
+
+# OR use the all-in-one script:
+.\scripts\run_pipeline.ps1
+```
+
+### 5. Setup database schema
+
+```powershell
+.\scripts\init-db.ps1
+```
+
+### 6. Setup Kafka topics
+
+```powershell
+.\scripts\setup_kafka_topics.ps1
+```
+
+### 7. Place the YOLOv8 model
+
+Place your trained `best.pt` model file in the `models/` directory.
+
+### 8. Run the system
+
+```powershell
+# Terminal 1 — Start Spark stream processor
+.\scripts\spark_submit.ps1
+
+# Terminal 2 — Start detection pipeline
+uv run python -m src.pipeline.main --source sample_video.mp4
+
+# With video display
+uv run python -m src.pipeline.main --source sample_video.mp4 --display
+
+# Without Kafka (testing only)
+uv run python -m src.pipeline.main --source sample_video.mp4 --no-kafka --display
+```
+
+### Web UIs
+
+| Service | URL | Credentials |
+|---|---|---|
+| Grafana Dashboard | http://localhost:3000 | admin / admin |
+| Spark Master UI | http://localhost:8080 | — |
+| Spark Worker UI | http://localhost:8081 | — |
+
+### Docker management
+
+```powershell
+docker compose ps          # Check service status
+docker compose logs -f     # Follow all logs
+docker compose down        # Stop services
+docker compose down -v     # Stop + remove data volumes (reset)
+```
+
+## Installation (Linux — Native)
+
+> Original setup for native Linux installations.
 
 1. **Clone the repository:**
 

@@ -38,16 +38,21 @@ except ImportError:
                 os.environ.setdefault(key.strip(), val.strip())
 
 # ─── Configuration ─────────────────────────────────────────────
-KAFKA_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+# When running inside Docker, use internal container hostnames:
+#   Kafka: kafka:29092  |  Postgres: postgres:5432
+# When running on host (native Python), use localhost.
+KAFKA_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS_INTERNAL",
+                          os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092"))
 KAFKA_TOPIC = os.getenv("KAFKA_TOPIC_VIOLATIONS", "video.violations")
 
-DB_HOST = os.getenv("SUPABASE_DB_HOST", "localhost")
+DB_HOST = os.getenv("SUPABASE_DB_HOST_INTERNAL",
+                    os.getenv("SUPABASE_DB_HOST", "postgres"))
 DB_PORT = os.getenv("SUPABASE_DB_PORT", "5432")
-DB_NAME = os.getenv("SUPABASE_DB_NAME", "postgres")
+DB_NAME = os.getenv("SUPABASE_DB_NAME", "sentinel_db")
 DB_USER = os.getenv("SUPABASE_DB_USER", "postgres")
-DB_PASSWORD = os.getenv("SUPABASE_DB_PASSWORD", "")
+DB_PASSWORD = os.getenv("SUPABASE_DB_PASSWORD", "localpassword")
 
-SSL_MODE = "disable" if DB_HOST == "localhost" else "require"
+SSL_MODE = "disable" if DB_HOST in ("localhost", "postgres") else "require"
 JDBC_URL = f"jdbc:postgresql://{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode={SSL_MODE}&prepareThreshold=0"
 CHECKPOINT_DIR = os.getenv("SPARK_CHECKPOINT_DIR", "/tmp/sentinel-checkpoints")
 

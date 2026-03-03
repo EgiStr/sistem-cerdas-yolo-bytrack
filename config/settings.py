@@ -104,7 +104,8 @@ class Settings(BaseSettings):
 
     # --- Spark ---
     spark_master: str = Field(default="local[2]")
-    spark_driver_memory: str = Field(default="3g")
+    spark_driver_memory: str = Field(default="2g")
+    spark_checkpoint_dir: str = Field(default="/tmp/sentinel-checkpoints")
 
     # --- Grafana ---
     grafana_url: str = Field(default="http://localhost:3000")

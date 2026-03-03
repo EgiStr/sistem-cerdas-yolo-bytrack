@@ -5,7 +5,7 @@ datasources:
     uid: sentinel-postgres
     type: postgres
     access: proxy
-    url: localhost:5432
+    url: postgres:5432
     database: sentinel_db
     user: postgres
     secureJsonData:

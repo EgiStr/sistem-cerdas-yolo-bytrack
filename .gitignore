@@ -40,3 +40,6 @@ data/
 # Spark checkpoints
 checkpoints/
 spark-warehouse/
+
+# Docker
+docker-compose.override.yml
